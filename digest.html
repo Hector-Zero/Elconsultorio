@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="Zero Magacin — Tu resumen diario personalizado por IA. Elige tus temas, diseño e idioma. Llega cada mañana a tu correo.">
+<meta property="og:title" content="Zero Magacin — Tu resumen diario con IA">
+<meta property="og:description" content="Cada mañana un email con lo que más te importa. Diseñado por ti, escrito por IA.">
+<meta property="og:url" content="https://zeroia.cl/digest">
+<title>Zero Magacin — Tu resumen diario con IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&family=Space+Grotesk:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#080808;--bg2:#0f0f0f;--bg3:#161616;
+  --text:#f5f5f5;--muted:#666660;--muted2:#444440;
+  --accent:#c8f060;--accent2:#a8d040;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
+}
+html{scroll-behavior:smooth;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;font-weight:300;line-height:1.6;overflow-x:hidden;}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 2.5rem;border-bottom:1px solid var(--border);background:rgba(8,8,8,0.92);backdrop-filter:blur(16px);}
+.logo-nav{display:flex;align-items:center;gap:.875rem;text-decoration:none;}
+.logo-nav svg{width:44px;height:44px;}
+.logo-wordmark{font-size:.7rem;font-weight:300;letter-spacing:.38em;color:var(--text);text-transform:uppercase;}
+.nav-links{display:flex;align-items:center;gap:2.5rem;}
+.nav-links a{font-size:.78rem;font-weight:300;letter-spacing:.04em;color:var(--muted);text-decoration:none;transition:color .2s;}
+.nav-links a:hover{color:var(--text);}
+.btn-cta{display:inline-flex;align-items:center;gap:.4rem;background:var(--accent);color:#080808;font-size:.78rem;font-weight:500;padding:.5rem 1.1rem;border-radius:2px;text-decoration:none;transition:background .2s,transform .15s;}
+.btn-cta:hover{background:var(--accent2);transform:translateY(-1px);}
+
+/* ── SHARED ── */
+.container{max-width:min(1100px,90vw);margin:0 auto;padding:0 max(5vw,80px);}
+.section-tag{font-size:.65rem;font-weight:400;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;}
+.section-tag::before{content:'';display:inline-block;width:20px;height:1px;background:var(--muted2);}
+h2{font-size:clamp(1.9rem,3vw,2.8rem);font-weight:200;line-height:1.12;letter-spacing:-.02em;color:var(--text);}
+h2 em{font-style:normal;color:var(--accent);}
+
+/* ── FADE ── */
+.fade{opacity:0;transform:translateY(16px);transition:opacity .7s ease,transform .7s ease;}
+.fade.on{opacity:1;transform:translateY(0);}
+.fade.d1{transition-delay:.1s;}.fade.d2{transition-delay:.2s;}.fade.d3{transition-delay:.3s;}.fade.d4{transition-delay:.4s;}
+
+/* ── BUTTONS ── */
+.btn-primary{display:inline-flex;align-items:center;gap:.5rem;background:var(--accent);color:#080808;font-size:.85rem;font-weight:500;padding:.85rem 1.8rem;border-radius:2px;text-decoration:none;transition:background .2s,transform .15s;border:none;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:.02em;}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-2px);}
+.btn-ghost{font-size:.78rem;font-weight:300;color:var(--muted);text-decoration:none;letter-spacing:.04em;border-bottom:1px solid var(--border2);padding-bottom:1px;transition:color .2s,border-color .2s;}
+.btn-ghost:hover{color:var(--text);border-color:var(--muted2);}
+
+/* ── HERO ── */
+.hero{min-height:100vh;display:flex;align-items:center;padding:100px 0 80px;position:relative;overflow:hidden;}
+.hero-inner{max-width:680px;}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:.6rem;font-size:.68rem;font-weight:400;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:2rem;}
+.hero-eyebrow span{width:5px;height:5px;background:var(--accent);border-radius:50%;display:inline-block;}
+h1{font-size:clamp(2.4rem,4.5vw,4rem);font-weight:300;line-height:1.06;letter-spacing:-.03em;color:var(--text);margin-bottom:1.75rem;font-family:'Space Grotesk',sans-serif;}
+h1 em{font-style:italic;color:var(--accent);font-family:'Instrument Serif',serif;font-weight:400;}
+.hero-body{font-size:.95rem;color:var(--muted);line-height:1.8;max-width:520px;margin-bottom:2.5rem;}
+.btn-group{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;}
+.hero-ghost{position:absolute;right:-80px;top:50%;transform:translateY(-50%);width:min(500px,55vw);height:min(500px,55vw);opacity:0.04;pointer-events:none;}
+
+/* ── TEMPLATE PICKER ── */
+--lime:#a3e635;--surface:#141414;--surface-2:#1a1a1a;--border-tp:#262626;--border-strong:#333;--text-dim:#a3a3a3;--text-faint:#666;--lime-glow:rgba(163,230,53,0.25);
+
+.template-picker{width:100%;padding:120px 0 140px;position:relative;}
+.template-picker::before{content:"";position:absolute;inset:80px 0 80px 0;background:radial-gradient(ellipse 60% 50% at 50% 40%,rgba(163,230,53,0.04),transparent 70%);pointer-events:none;z-index:0;}
+.tp-inner{max-width:1200px;margin:0 auto;padding:0 max(5vw,80px);position:relative;z-index:1;}
+.tp-header{margin-bottom:72px;max-width:720px;}
+.tp-eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--lime,#a3e635);margin-bottom:20px;}
+.tp-eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--lime,#a3e635);box-shadow:0 0 10px var(--lime,#a3e635);}
+.tp-title{font-size:clamp(38px,5vw,56px);font-weight:700;line-height:1.05;letter-spacing:-0.03em;margin-bottom:20px;font-family:'Space Grotesk',sans-serif;}
+.tp-title em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--lime,#a3e635);}
+.tp-sub{font-size:17px;line-height:1.55;color:var(--text-dim,#a3a3a3);max-width:560px;}
+/* ── ACCORDION ── */
+.tp-accordion{position:relative;z-index:1;display:flex;gap:6px;height:260px;}
+/* Per-card accent colours */
+.tp-card[data-template="editorial_dark"]{--card-accent:#c8a96e;}
+.tp-card[data-template="minimal_white"]{--card-accent:#e8e8e8;}
+.tp-card[data-template="magazine_bold"]{--card-accent:#ff3333;}
+.tp-card[data-template="dark_tech"]{--card-accent:#00ff41;}
+.tp-card[data-template="caligrafico"]{--card-accent:#c4a882;}
+.tp-card[data-template="nordico"]{--card-accent:#6b9bd2;}
+/* Card base */
+.tp-card{position:relative;width:120px;height:260px;border-radius:12px;overflow:hidden;cursor:pointer;flex-shrink:0;transition:width 0.4s cubic-bezier(0.4,0,0.2,1),border-color 0.25s;border:1.5px solid transparent;border-left:3px solid var(--card-accent,#a3e635);background:var(--surface,#141414);box-shadow:0 2px 8px rgba(0,0,0,0.5);}
+/* Hover: expand hovered card, contract siblings */
+.tp-accordion:has(.tp-card:hover) .tp-card:not(:hover){width:80px;}
+.tp-card:hover{width:420px;}
+/* Selected state */
+.tp-card.is-selected{width:420px;border:2px solid var(--lime,#a3e635);box-shadow:0 0 0 1px var(--lime,#a3e635),0 0 32px -8px rgba(163,230,53,0.3);}
+.tp-accordion.has-selected .tp-card:not(.is-selected):not(:hover){width:80px;}
+/* Vertical text label (shown when collapsed) */
+.tp-vlabel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;text-orientation:mixed;font-size:11px;font-weight:500;letter-spacing:0.12em;color:rgba(255,255,255,0.6);transition:opacity 0.12s;pointer-events:none;white-space:nowrap;z-index:3;}
+.tp-card:hover .tp-vlabel,.tp-card.is-selected .tp-vlabel{opacity:0;}
+/* Expanded content layer */
+.tp-expand{position:absolute;inset:0;display:flex;flex-direction:column;opacity:0;transition:opacity 0.12s;min-width:418px;}
+.tp-card:hover .tp-expand,.tp-card.is-selected .tp-expand{opacity:1;transition:opacity 0.22s 0.2s;}
+/* Thumbnail */
+.tp-thumb{flex:1;position:relative;overflow:hidden;border-bottom:1px solid rgba(255,255,255,0.08);}
+.tp-thumb-inner{position:absolute;inset:0;padding:16px;display:flex;flex-direction:column;}
+/* Info bar */
+.tp-info{flex-shrink:0;padding:12px 16px 14px;background:rgba(6,6,6,0.88);}
+.tp-info-name{font-size:15px;font-weight:600;color:#fff;letter-spacing:-0.01em;margin-bottom:3px;}
+.tp-info-desc{font-size:11px;color:rgba(255,255,255,0.46);line-height:1.4;}
+/* Mobile: fixed-size scroll */
+@media(max-width:768px){
+  .tp-accordion{overflow-x:auto;overflow-y:visible;scrollbar-width:none;-ms-overflow-style:none;height:260px;}
+  .tp-accordion::-webkit-scrollbar{display:none;}
+  .tp-card,.tp-accordion:has(.tp-card:hover) .tp-card:not(:hover),.tp-accordion.has-selected .tp-card:not(.is-selected):not(:hover){width:200px!important;height:260px;}
+  .tp-card:hover,.tp-card.is-selected{width:200px!important;}
+  .tp-vlabel{writing-mode:horizontal-tb;opacity:0!important;}
+  .tp-expand{opacity:1!important;transition:none!important;min-width:0;}
+}
+
+/* ── THUMB MOCKUPS ── */
+.thumb-editorial{background:#f5f1e8;}
+.thumb-editorial .masthead{display:flex;justify-content:space-between;font-family:'Space Grotesk',sans-serif;font-size:7px;letter-spacing:0.15em;color:#999;padding-bottom:10px;border-bottom:0.5px solid #d4cfc0;margin-bottom:12px;}
+.thumb-editorial .hero{background:#1a1a1a;color:#f5f1e8;padding:14px 14px 16px;border-radius:4px;flex:1;}
+.thumb-editorial .hero-kicker{font-family:'Space Grotesk',sans-serif;font-size:6px;letter-spacing:0.2em;color:#a3e635;margin-bottom:6px;}
+.thumb-editorial .hero-title{font-family:'Instrument Serif',serif;font-size:13px;line-height:1.15;font-weight:600;margin-bottom:6px;}
+.thumb-editorial .hero-body{font-size:6.5px;line-height:1.4;color:#b8b0a0;}
+.thumb-editorial .row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
+.thumb-editorial .card-sm{background:#ebe5d4;border-radius:3px;padding:8px;}
+.thumb-editorial .card-sm .k{font-family:'Space Grotesk',sans-serif;font-size:5.5px;letter-spacing:0.15em;color:#a89e8c;margin-bottom:4px;}
+.thumb-editorial .card-sm .t{font-family:'Instrument Serif',serif;font-size:8px;line-height:1.2;color:#1a1a1a;font-weight:500;}
+.thumb-minimal{background:#ffffff;}
+.thumb-minimal .top{font-family:'Space Grotesk',sans-serif;font-size:6.5px;letter-spacing:0.15em;color:#a3a3a3;text-align:center;padding-bottom:14px;border-bottom:0.5px solid #e5e5e5;margin-bottom:16px;}
+.thumb-minimal .brand{font-family:'Instrument Serif',serif;font-size:14px;text-align:center;color:#1a1a1a;margin-bottom:18px;}
+.thumb-minimal .entry{margin-bottom:14px;}
+.thumb-minimal .entry .num{font-family:'Space Grotesk',sans-serif;font-size:7px;color:#a3a3a3;letter-spacing:0.2em;margin-bottom:4px;}
+.thumb-minimal .entry .t{font-size:8.5px;line-height:1.35;color:#171717;font-weight:500;margin-bottom:3px;}
+.thumb-minimal .entry .b{font-size:6.5px;line-height:1.4;color:#737373;}
+.thumb-magazine{background:#f4f2ed;padding:0!important;}
+.thumb-magazine .bar{background:#111;color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:11px;letter-spacing:0.2em;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;}
+.thumb-magazine .bar small{font-family:'Space Grotesk',sans-serif;font-size:6px;font-weight:400;letter-spacing:0.15em;color:#a3a3a3;}
+.thumb-magazine .body{padding:14px 16px;flex:1;}
+.thumb-magazine .kicker{font-family:'Space Grotesk',sans-serif;font-size:6.5px;letter-spacing:0.2em;color:#737373;margin-bottom:8px;}
+.thumb-magazine .headline{font-family:'Space Grotesk',sans-serif;font-weight:900;font-size:14px;line-height:1.05;color:#111;text-transform:uppercase;margin-bottom:10px;letter-spacing:-0.01em;}
+.thumb-magazine .rule{height:1px;background:#111;margin:10px 0;}
+.thumb-magazine .sub{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:8px;line-height:1.2;color:#111;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;}
+.thumb-tech{background:#0d0d0d;font-family:'Space Grotesk',monospace;}
+.thumb-tech .term-bar{display:flex;gap:5px;margin-bottom:12px;}
+.thumb-tech .term-bar span{width:7px;height:7px;border-radius:50%;background:#333;}
+.thumb-tech .term-bar span:first-child{background:#ff5f56;}
+.thumb-tech .term-bar span:nth-child(2){background:#ffbd2e;}
+.thumb-tech .term-bar span:nth-child(3){background:#27c93f;}
+.thumb-tech .line{font-size:7px;line-height:1.6;color:#a3e635;margin-bottom:2px;}
+.thumb-tech .line.dim{color:#555;}
+.thumb-tech .line.white{color:#e5e5e5;}
+.thumb-tech .banner{border:1px solid #a3e635;background:rgba(163,230,53,0.08);padding:8px 10px;margin:8px 0;border-radius:2px;}
+.thumb-tech .banner .l1{color:#a3e635;font-size:7.5px;font-weight:700;margin-bottom:3px;letter-spacing:0.05em;}
+.thumb-tech .banner .l2{color:#a3a3a3;font-size:6.5px;line-height:1.5;}
+.thumb-tech .prompt{color:#a3e635;font-size:7px;margin-top:auto;}
+.thumb-tech .prompt::after{content:"_";display:inline-block;animation:blink 1s steps(2) infinite;}
+@keyframes blink{50%{opacity:0;}}
+.thumb-caligra{background:linear-gradient(180deg,#f5ede0 0%,#ebe1cf 100%);}
+.thumb-caligra .top{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:6px;letter-spacing:0.2em;color:#a89e8c;text-transform:uppercase;padding-bottom:10px;margin-bottom:10px;}
+.thumb-caligra .brand{font-family:'Instrument Serif',serif;font-style:italic;font-size:18px;text-align:center;color:#3d2f1f;margin-bottom:4px;}
+.thumb-caligra .orn{text-align:center;color:#a89e8c;font-size:8px;letter-spacing:0.4em;margin-bottom:14px;}
+.thumb-caligra .kick{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:5.5px;letter-spacing:0.25em;color:#8a7c65;text-transform:uppercase;margin-bottom:6px;}
+.thumb-caligra .pull{font-family:'Instrument Serif',serif;font-size:12px;line-height:1.2;color:#3d2f1f;text-align:center;font-style:italic;padding:0 6px;}
+.thumb-caligra .drop{font-family:'Instrument Serif',serif;font-size:22px;float:left;line-height:0.85;padding-right:4px;color:#3d2f1f;font-style:normal;}
+.thumb-caligra .body{font-family:'Instrument Serif',serif;font-size:6.5px;line-height:1.5;color:#5c4a33;margin-top:10px;}
+.thumb-nordic{background:#f2f2f0;font-family:'Space Grotesk',sans-serif;}
+.thumb-nordic .top{font-size:7px;letter-spacing:0.1em;color:#6b6b6b;display:flex;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid #d4d4d2;margin-bottom:14px;}
+.thumb-nordic .block{background:#2d3538;color:#e8e8e6;padding:10px 12px;border-radius:2px;margin-bottom:8px;}
+.thumb-nordic .block.alt{background:#fff;color:#2d3538;border:1px solid #d4d4d2;}
+.thumb-nordic .block .k{font-size:5.5px;letter-spacing:0.18em;text-transform:uppercase;color:#8a9599;margin-bottom:4px;font-weight:500;}
+.thumb-nordic .block.alt .k{color:#6b6b6b;}
+.thumb-nordic .block .t{font-size:8px;line-height:1.3;font-weight:500;}
+
+/* ── TEMPLATE MINIATURES ── */
+/* editorial_dark */
+.prev-editorial{background:#f0ede8;padding:10px;height:100%;display:flex;flex-direction:column;gap:5px;}
+.prev-editorial .ph{background:#1a1916;border-radius:3px;padding:8px;margin-bottom:5px;}
+.prev-editorial .ph-tag{font-size:5px;letter-spacing:1px;text-transform:uppercase;color:#a09890;margin-bottom:3px;}
+.prev-editorial .ph-title{font-size:8px;color:#f5f2ed;line-height:1.3;font-family:Georgia,serif;}
+.prev-editorial .ph-body{font-size:5.5px;color:#b8b3aa;line-height:1.5;margin-top:3px;}
+.prev-editorial .cols{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.prev-editorial .card{background:#fff;border-radius:2px;padding:5px;}
+.prev-editorial .card-tag{font-size:4px;letter-spacing:1px;text-transform:uppercase;color:#9e998f;}
+.prev-editorial .card-title{font-size:5.5px;color:#1a1916;line-height:1.3;font-family:Georgia,serif;margin-top:2px;}
+.prev-editorial .card-body{font-size:4.5px;color:#5a5650;line-height:1.4;margin-top:2px;}
+
+/* minimal_white */
+.prev-minimal{background:#fff;padding:14px 12px;height:100%;display:flex;flex-direction:column;gap:0;}
+.prev-minimal .mh{font-size:4px;letter-spacing:2px;text-transform:uppercase;color:#bbb;margin-bottom:4px;}
+.prev-minimal .mt{font-size:10px;font-weight:700;color:#111;margin-bottom:3px;}
+.prev-minimal .ml{border-top:1px solid #111;margin-bottom:8px;}
+.prev-minimal .ms{margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid #f0f0f0;}
+.prev-minimal .ms-n{font-size:7px;color:#ccc;display:inline;margin-right:4px;}
+.prev-minimal .ms-tag{font-size:4px;letter-spacing:1px;text-transform:uppercase;color:#bbb;}
+.prev-minimal .ms-title{font-size:6.5px;color:#111;margin-top:2px;line-height:1.3;}
+.prev-minimal .ms-body{font-size:4.5px;color:#444;line-height:1.5;margin-top:2px;}
+
+/* magazine_bold */
+.prev-magazine{background:#fff;height:100%;display:flex;flex-direction:column;}
+.prev-magazine .mgh{background:#111;padding:8px 10px;margin-bottom:0;}
+.prev-magazine .mgh-title{font-size:11px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1px;line-height:1;}
+.prev-magazine .mgh-sub{font-size:4px;color:#aaa;letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
+.prev-magazine .mgb{border-bottom:3px solid #111;margin:0;height:3px;}
+.prev-magazine .mg-content{padding:8px 10px;flex:1;}
+.prev-magazine .mg-tag{display:inline-block;background:#111;color:#fff;font-size:4px;letter-spacing:1px;text-transform:uppercase;padding:1px 4px;margin-bottom:3px;}
+.prev-magazine .mg-title{font-size:9px;font-weight:900;text-transform:uppercase;color:#111;line-height:1.1;margin-bottom:4px;}
+.prev-magazine .mg-body{font-size:4.5px;color:#333;line-height:1.5;}
+.prev-magazine .mg-div{border-bottom:2px solid #111;margin:5px 10px;}
+.prev-magazine .mg-s{padding:4px 10px;}
+.prev-magazine .mg-s-t{font-size:6px;font-weight:900;text-transform:uppercase;color:#111;}
+
+/* dark_tech */
+.prev-darktech{background:#0a0a0a;padding:10px;height:100%;display:flex;flex-direction:column;gap:6px;font-family:'Courier New',monospace;}
+.prev-darktech .dt-head{border:1px solid #1e1e1e;padding:7px;background:#0d0d0d;}
+.prev-darktech .dt-cmd{font-size:5px;color:#00ff41;margin-bottom:3px;}
+.prev-darktech .dt-name{font-size:9px;color:#00ff41;font-weight:bold;}
+.prev-darktech .dt-sub{font-size:4.5px;color:#aaa;}
+.prev-darktech .dt-card{border:1px solid #1e1e1e;padding:7px;background:#0d0d0d;}
+.prev-darktech .dt-idx{font-size:5px;color:#00ff41;margin-bottom:3px;}
+.prev-darktech .dt-title{font-size:6px;color:#e8e8e8;line-height:1.3;margin-bottom:3px;}
+.prev-darktech .dt-body{font-size:4px;color:#aaa;line-height:1.5;}
+
+/* caligrafico */
+.prev-calig{background:#f7f3e9;padding:10px;height:100%;display:flex;flex-direction:column;gap:5px;}
+.prev-calig .ca-head{text-align:center;margin-bottom:5px;}
+.prev-calig .ca-label{font-size:4px;letter-spacing:2px;color:#b8956a;text-transform:uppercase;}
+.prev-calig .ca-title{font-size:10px;font-style:italic;color:#3a2e22;font-family:Georgia,serif;margin:2px 0;}
+.prev-calig .ca-deco{font-size:8px;color:#b8956a;letter-spacing:4px;}
+.prev-calig .ca-card{background:#fff;border-radius:3px;padding:7px;border:1px solid #e8e2d6;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.prev-calig .ca-card-deco{text-align:center;font-size:6px;color:#b8956a;margin-bottom:3px;}
+.prev-calig .ca-card-title{font-size:6px;font-style:italic;color:#3a2e22;text-align:center;font-family:Georgia,serif;line-height:1.3;}
+.prev-calig .ca-card-sep{width:20px;border-top:1px solid #b8956a;margin:3px auto;}
+.prev-calig .ca-cap{float:left;font-size:16px;line-height:.75;color:#b8956a;margin:1px 3px 0 0;font-style:italic;font-family:Georgia,serif;}
+.prev-calig .ca-body{font-size:4.5px;color:#4a3f33;line-height:1.5;font-family:Georgia,serif;}
+
+/* nordico */
+.prev-nordico{background:#f2f2f0;padding:10px;height:100%;display:flex;flex-direction:column;gap:5px;}
+.prev-nordico .nd-label{font-size:4px;letter-spacing:2px;text-transform:uppercase;color:#888;}
+.prev-nordico .nd-title{font-size:10px;font-weight:700;color:#111;margin:1px 0 3px;}
+.prev-nordico .nd-rule{height:3px;background:#2c2c2c;margin-bottom:5px;}
+.prev-nordico .nd-hero{background:#2c2c2c;padding:7px;border-radius:2px;}
+.prev-nordico .nd-htag{font-size:4px;letter-spacing:1px;text-transform:uppercase;color:#aaa;}
+.prev-nordico .nd-htitle{font-size:7px;font-weight:700;color:#fff;line-height:1.3;margin:2px 0;}
+.prev-nordico .nd-hbody{font-size:4px;color:#ccc;line-height:1.5;}
+.prev-nordico .nd-card{border-left:2px solid #2c2c2c;padding:4px 6px;background:#fff;}
+.prev-nordico .nd-ctag{font-size:4px;letter-spacing:1px;text-transform:uppercase;color:#888;}
+.prev-nordico .nd-ctitle{font-size:6px;font-weight:700;color:#2c2c2c;line-height:1.3;margin-top:1px;}
+
+/* ── FORM SECTION ── */
+.form-section{padding:6rem 0 8rem;border-top:1px solid var(--border);}
+.form-wrap{max-width:720px;margin:3.5rem auto 0;}
+
+/* form fields */
+.form-group{margin-bottom:1.75rem;}
+.form-label{display:block;font-size:.72rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;}
+.form-label em{color:var(--accent);font-style:normal;margin-left:2px;}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:'Inter',sans-serif;font-weight:300;font-size:.88rem;padding:.75rem 1rem;border-radius:2px;transition:border-color .2s,box-shadow .2s;appearance:none;-webkit-appearance:none;outline:none;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:rgba(200,240,96,.4);box-shadow:0 0 0 3px rgba(200,240,96,.06);}
+.form-input::placeholder{color:var(--muted2);}
+.form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666660' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 1rem center;padding-right:2.5rem;cursor:pointer;}
+.form-select option{background:var(--bg3);color:var(--text);}
+
+/* days grid */
+.days-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.5rem;}
+.day-col{display:flex;flex-direction:column;gap:.4rem;}
+.day-label{font-size:.6rem;font-weight:400;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center;}
+.day-col .form-select{font-size:.65rem;padding:.5rem .25rem .5rem .4rem;background-position:right .3rem center;padding-right:1.2rem;}
+
+/* radio groups */
+.radio-group{display:flex;flex-direction:column;gap:.5rem;}
+.radio-option{display:flex;align-items:center;gap:.75rem;cursor:pointer;}
+.radio-option input[type=radio]{display:none;}
+.radio-dot{width:16px;height:16px;border:1px solid var(--border2);border-radius:50%;flex-shrink:0;position:relative;transition:border-color .2s;}
+.radio-option input[type=radio]:checked + .radio-dot{border-color:var(--accent);}
+.radio-option input[type=radio]:checked + .radio-dot::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:6px;height:6px;background:var(--accent);border-radius:50%;}
+.radio-text{font-size:.85rem;color:var(--muted);transition:color .2s;}
+.radio-option:hover .radio-text{color:var(--text);}
+.radio-option input[type=radio]:checked ~ .radio-text{color:var(--text);}
+
+/* row groups */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;}
+
+/* design hidden input indicator */
+.design-indicator{border:1px solid var(--border2);background:var(--bg3);padding:.6rem 1rem;border-radius:2px;font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:.5rem;}
+.design-indicator .di-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;opacity:0;transition:opacity .3s;}
+.design-indicator.has-value .di-dot{opacity:1;}
+.design-indicator.has-value{color:var(--text);}
+
+/* divider */
+.form-divider{border:none;border-top:1px solid var(--border);margin:2.5rem 0;}
+
+/* password toggle */
+.pw-wrap{position:relative;}
+.pw-wrap .form-input{padding-right:3.5rem;}
+.pw-toggle{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#a3e635;font-size:.72rem;font-family:inherit;cursor:pointer;padding:0;letter-spacing:.04em;}
+
+/* step 2 inline panel */
+.step2-panel{display:none;margin-top:1.75rem;padding:1.75rem;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:6px;}
+.step2-panel.visible{display:block;}
+.step2-title{font-size:1rem;font-weight:400;margin-bottom:.25rem;}
+.step2-sub{font-size:.8rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.6;}
+.step2-already{font-size:.78rem;color:var(--muted);margin-top:1rem;}
+.step2-already a{color:var(--accent);text-decoration:none;}
+.step2-already a:hover{text-decoration:underline;}
+
+/* submit area */
+.submit-area{display:flex;align-items:center;gap:2rem;flex-wrap:wrap;margin-top:2.5rem;}
+.submit-note{font-size:.75rem;color:var(--muted);line-height:1.6;}
+
+/* success msg */
+.success-msg{display:none;background:rgba(200,240,96,.06);border:1px solid rgba(200,240,96,.2);padding:1.25rem 1.5rem;border-radius:2px;font-size:.85rem;color:var(--accent);margin-top:1.5rem;line-height:1.7;}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--border);padding:1.75rem 2.5rem;display:flex;justify-content:space-between;align-items:center;background:var(--bg2);}
+.footer-brand{display:flex;align-items:center;gap:.75rem;}
+.footer-brand svg{width:22px;height:22px;}
+.footer-brand span{font-size:.62rem;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);}
+.footer-links{display:flex;gap:2rem;}
+.footer-links a{font-size:.72rem;color:var(--muted);text-decoration:none;letter-spacing:.04em;transition:color .2s;}
+.footer-links a:hover{color:var(--text);}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .designs-grid{grid-template-columns:repeat(2,1fr);}
+  .days-grid{grid-template-columns:repeat(4,1fr);}
+  .form-row{grid-template-columns:1fr;}
+  nav{padding:0 1.25rem;}
+  .nav-links a:not(.btn-cta){display:none;}
+  footer{flex-direction:column;gap:1rem;text-align:center;}
+  .footer-links{justify-content:center;}
+  .submit-area{flex-direction:column;align-items:flex-start;}
+}
+@media(max-width:600px){
+  .designs-grid{grid-template-columns:1fr;}
+  .days-grid{grid-template-columns:repeat(2,1fr);}
+  .hero-ghost{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ NAV ═══ -->
+<nav>
+  <a href="/" class="logo-nav">
+    <svg viewBox="60 60 200 200" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="160" cy="138" r="4" fill="#c8f060"/>
+      <circle cx="160" cy="138" r="40" fill="none" stroke="#fff" stroke-width="1" opacity="0.9"/>
+      <circle cx="160" cy="98" r="3" fill="#fff" opacity="0.9"/><circle cx="194.6" cy="118" r="3" fill="#fff" opacity="0.9"/><circle cx="194.6" cy="158" r="3" fill="#fff" opacity="0.9"/><circle cx="160" cy="178" r="3" fill="#fff" opacity="0.9"/><circle cx="125.4" cy="158" r="3" fill="#fff" opacity="0.9"/><circle cx="125.4" cy="118" r="3" fill="#fff" opacity="0.9"/>
+      <line x1="160" y1="138" x2="160" y2="101" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="120" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="156" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="160" y2="175" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="156" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="120" stroke="#fff" stroke-width="0.6" opacity="0.4"/>
+      <circle cx="160" cy="98" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="194.6" cy="118" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="194.6" cy="158" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="160" cy="178" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="125.4" cy="158" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="125.4" cy="118" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/>
+    </svg>
+    <span class="logo-wordmark">Z E R O</span>
+  </a>
+  <div class="nav-links">
+    <a href="/">Inicio</a>
+    <a href="/cuenta.html">Mi Magacin →</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <svg class="hero-ghost" viewBox="60 60 200 200" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="160" cy="138" r="4" fill="#c8f060"/>
+    <circle cx="160" cy="138" r="40" fill="none" stroke="#fff" stroke-width="0.8"/>
+    <circle cx="160" cy="98" r="3" fill="#fff"/><circle cx="194.6" cy="118" r="3" fill="#fff"/><circle cx="194.6" cy="158" r="3" fill="#fff"/><circle cx="160" cy="178" r="3" fill="#fff"/><circle cx="125.4" cy="158" r="3" fill="#fff"/><circle cx="125.4" cy="118" r="3" fill="#fff"/>
+    <line x1="160" y1="138" x2="160" y2="101" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="120" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="156" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="160" y2="175" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="156" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="120" stroke="#fff" stroke-width="0.5" opacity="0.4"/>
+    <circle cx="160" cy="98" r="20" fill="none" stroke="#fff" stroke-width="0.6"/><circle cx="194.6" cy="118" r="20" fill="none" stroke="#fff" stroke-width="0.6"/><circle cx="194.6" cy="158" r="20" fill="none" stroke="#fff" stroke-width="0.6"/><circle cx="160" cy="178" r="20" fill="none" stroke="#fff" stroke-width="0.6"/><circle cx="125.4" cy="158" r="20" fill="none" stroke="#fff" stroke-width="0.6"/><circle cx="125.4" cy="118" r="20" fill="none" stroke="#fff" stroke-width="0.6"/>
+  </svg>
+  <div class="container">
+    <div class="hero-inner">
+      <div class="hero-eyebrow"><span></span>Zero Magacin · Personalización por IA</div>
+      <h1>Un email que<br>vale la pena<br><em>abrir cada mañana</em></h1>
+      <p class="hero-body">Elige tus temas, diseño visual e idioma. Inteligencia artificial que lee, selecciona y escribe para ti — exactamente lo que quieres saber, en el largo que tienes tiempo para leer. Llega cada mañana a tu correo.</p>
+      <div class="btn-group">
+        <a href="#previsualizador" class="btn-primary">Elegir mi diseño →</a>
+        <a href="#formulario" class="btn-ghost">Ir directo al formulario</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ TEMPLATE PICKER ═══ -->
+<section class="template-picker" id="previsualizador" aria-labelledby="tp-title">
+  <div class="tp-inner">
+  <header class="tp-header fade">
+    <div class="tp-eyebrow">01 · Elige tu diseño</div>
+    <h2 class="tp-title" id="tp-title">Un magacin <em>que habla por ti.</em></h2>
+    <p class="tp-sub">Haz clic en una tarjeta para seleccionar ese diseño. Se pre-completará en el formulario de suscripción.</p>
+  </header>
+
+  <div class="tp-accordion" id="tpAccordion" role="radiogroup" aria-label="Seleccionar diseño de template">
+
+    <!-- 1. EDITORIAL OSCURO -->
+    <article class="tp-card is-selected" data-template="editorial_dark" role="radio" aria-checked="true" tabindex="0">
+      <div class="tp-vlabel">Editorial Oscuro</div>
+      <div class="tp-expand">
+        <div class="tp-thumb">
+          <div class="tp-thumb-inner thumb-editorial">
+            <div class="masthead"><span>MAGACIN · LUN 22</span><span>N°047</span></div>
+            <div class="hero">
+              <div class="hero-kicker">CIENCIA · PORTADA</div>
+              <div class="hero-title">El telescopio que cambió nuestra comprensión del cosmos</div>
+              <div class="hero-body">Las últimas imágenes del James Webb revelan estructuras nunca antes vistas.</div>
+            </div>
+            <div class="row">
+              <div class="card-sm"><div class="k">TECNOLOGÍA</div><div class="t">La IA que aprende a razonar como humanos.</div></div>
+              <div class="card-sm"><div class="k">HISTORIA</div><div class="t">El día que cambió Europa para siempre.</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="tp-info">
+          <div class="tp-info-name">Editorial Oscuro</div>
+          <div class="tp-info-desc">Hero card oscuro sobre fondo crema. Elegante y editorial.</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- 2. MINIMAL BLANCO -->
+    <article class="tp-card" data-template="minimal_white" role="radio" aria-checked="false" tabindex="0">
+      <div class="tp-vlabel">Minimal Blanco</div>
+      <div class="tp-expand">
+        <div class="tp-thumb">
+          <div class="tp-thumb-inner thumb-minimal">
+            <div class="top">TU MAGACIN DIARIO · MARTES 22</div>
+            <div class="brand">El Curioso</div>
+            <div class="entry">
+              <div class="num">01</div>
+              <div class="t">El problema de la consciencia y por qué nadie lo ha resuelto.</div>
+              <div class="b">Una discusión entre neurocientíficos revela por qué la pregunta sigue abierta.</div>
+            </div>
+            <div class="entry">
+              <div class="num">02</div>
+              <div class="t">Cómo el sueño consolida la memoria.</div>
+            </div>
+          </div>
+        </div>
+        <div class="tp-info">
+          <div class="tp-info-name">Minimal Blanco</div>
+          <div class="tp-info-desc">Solo texto. Numeración elegante. Como un blog de lujo.</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- 3. MAGAZINE BOLD -->
+    <article class="tp-card" data-template="magazine_bold" role="radio" aria-checked="false" tabindex="0">
+      <div class="tp-vlabel">Magazine Bold</div>
+      <div class="tp-expand">
+        <div class="tp-thumb">
+          <div class="tp-thumb-inner thumb-magazine">
+            <div class="bar"><span>MI DIARIO</span><small>MAR 22 · MAGACIN</small></div>
+            <div class="body">
+              <div class="kicker">ECONOMÍA · ANÁLISIS</div>
+              <div class="headline">El banco que apostó todo</div>
+              <div class="rule"></div>
+              <div class="sub">HISTORIA · La batalla que nadie recuerda</div>
+              <div class="rule"></div>
+              <div class="sub">ARTE · El cuadro que nadie quería</div>
+            </div>
+          </div>
+        </div>
+        <div class="tp-info">
+          <div class="tp-info-name">Magazine Bold</div>
+          <div class="tp-info-desc">Tipografía de impacto. Estilo revista impresa en negrita.</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- 4. DARK TECH -->
+    <article class="tp-card" data-template="dark_tech" role="radio" aria-checked="false" tabindex="0">
+      <div class="tp-vlabel">Dark Tech</div>
+      <div class="tp-expand">
+        <div class="tp-thumb">
+          <div class="tp-thumb-inner thumb-tech">
+            <div class="term-bar"><span></span><span></span><span></span></div>
+            <div class="line dim">$ magacin --run --date=2026-04-22</div>
+            <div class="line">✓ ia inicializada</div>
+            <div class="banner">
+              <div class="l1">[01] IA · GPT-5 supera benchmarks humanos</div>
+              <div class="l2">Los resultados muestran una mejora del 40% en razonamiento multi-paso...</div>
+            </div>
+            <div class="line dim">[02] MATEMÁTICAS · La conjetura de Collatz...</div>
+            <div class="prompt">ready</div>
+          </div>
+        </div>
+        <div class="tp-info">
+          <div class="tp-info-name">Dark Tech</div>
+          <div class="tp-info-desc">Terminal oscura, verde neón. Para los que aman los datos crudos.</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- 5. CALIGRÁFICO -->
+    <article class="tp-card" data-template="caligrafico" role="radio" aria-checked="false" tabindex="0">
+      <div class="tp-vlabel">Caligráfico</div>
+      <div class="tp-expand">
+        <div class="tp-thumb">
+          <div class="tp-thumb-inner thumb-caligra">
+            <div class="top">Tu magacin diario</div>
+            <div class="brand">El Lector</div>
+            <div class="orn">✦ ✦ ✦</div>
+            <div class="kick">LITERATURA · PORTADA</div>
+            <div class="pull">La carta que Flaubert escribió y nunca envió</div>
+            <div class="body"><span class="drop">E</span>n el otoño de 1857, Flaubert tomó la pluma y comenzó a escribir lo que sería una de las cartas más íntimas de su vida...</div>
+          </div>
+        </div>
+        <div class="tp-info">
+          <div class="tp-info-name">Caligráfico</div>
+          <div class="tp-info-desc">Pergamino, cursiva elegante y capitulares. Atemporal.</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- 6. NÓRDICO -->
+    <article class="tp-card" data-template="nordico" role="radio" aria-checked="false" tabindex="0">
+      <div class="tp-vlabel">Nórdico</div>
+      <div class="tp-expand">
+        <div class="tp-thumb">
+          <div class="tp-thumb-inner thumb-nordic">
+            <div class="top"><span>MAGACIN · MAR 22</span><span>N°031</span></div>
+            <div class="block">
+              <div class="k">PSICOLOGÍA</div>
+              <div class="t">Por qué tomamos peores decisiones cuando tenemos hambre</div>
+            </div>
+            <div class="block alt">
+              <div class="k">ARQUITECTURA</div>
+              <div class="t">La casa que Tadao Ando construyó bajo tierra</div>
+            </div>
+          </div>
+        </div>
+        <div class="tp-info">
+          <div class="tp-info-name">Nórdico</div>
+          <div class="tp-info-desc">Gris frío, sans-serif limpia. Claridad escandinava.</div>
+        </div>
+      </div>
+    </article>
+
+  </div>
+  </div><!-- /tp-inner -->
+</section>
+
+<!-- ═══ FORMULARIO ═══ -->
+<section class="form-section" id="formulario">
+  <div class="container">
+    <div class="fade">
+      <div class="section-tag">Configuración</div>
+      <h2>Tu Magacin,<br><em>a tu medida</em></h2>
+    </div>
+
+    <div class="form-wrap">
+      <form id="digestForm" novalidate>
+
+        <!-- Datos personales -->
+        <div class="form-row fade d1">
+          <div class="form-group">
+            <label class="form-label" for="nombre">Nombre completo <em>*</em></label>
+            <input class="form-input" type="text" id="nombre" name="nombre" placeholder="Tu nombre" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="digestNombre">Nombre de tu Magacin <em>*</em></label>
+            <input class="form-input" type="text" id="digestNombre" name="digestNombre" placeholder='Ej: "El Curioso", "Mi Diario"' required>
+          </div>
+        </div>
+
+        <hr class="form-divider fade">
+
+        <!-- Temas por día -->
+        <div class="form-group fade">
+          <label class="form-label">Tema por día <em>*</em></label>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:1rem;line-height:1.6;">Selecciona el tema que recibirás cada día de la semana. Elige "Descanso" para no recibir ese día.</p>
+          <div class="days-grid">
+            <div class="day-col">
+              <div class="day-label">Lun</div>
+              <select class="form-select" name="lunes" id="lunes">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai">IA</option>
+                <option value="history">Historia</option>
+                <option value="cuisine">Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space">Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy">Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off">Descanso</option>
+              </select>
+            </div>
+            <div class="day-col">
+              <div class="day-label">Mar</div>
+              <select class="form-select" name="martes" id="martes">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai" selected>IA</option>
+                <option value="history">Historia</option>
+                <option value="cuisine">Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space">Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy">Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off">Descanso</option>
+              </select>
+            </div>
+            <div class="day-col">
+              <div class="day-label">Mié</div>
+              <select class="form-select" name="miercoles" id="miercoles">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai">IA</option>
+                <option value="history">Historia</option>
+                <option value="cuisine">Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space" selected>Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy">Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off">Descanso</option>
+              </select>
+            </div>
+            <div class="day-col">
+              <div class="day-label">Jue</div>
+              <select class="form-select" name="jueves" id="jueves">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai">IA</option>
+                <option value="history" selected>Historia</option>
+                <option value="cuisine">Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space">Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy">Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off">Descanso</option>
+              </select>
+            </div>
+            <div class="day-col">
+              <div class="day-label">Vie</div>
+              <select class="form-select" name="viernes" id="viernes">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai">IA</option>
+                <option value="history">Historia</option>
+                <option value="cuisine">Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space">Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy" selected>Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off">Descanso</option>
+              </select>
+            </div>
+            <div class="day-col">
+              <div class="day-label">Sáb</div>
+              <select class="form-select" name="sabado" id="sabado">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai">IA</option>
+                <option value="history">Historia</option>
+                <option value="cuisine" selected>Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space">Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy">Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off">Descanso</option>
+              </select>
+            </div>
+            <div class="day-col">
+              <div class="day-label">Dom</div>
+              <select class="form-select" name="domingo" id="domingo">
+                <option value="science">Ciencia</option>
+                <option value="technology">Tecnología</option>
+                <option value="ai">IA</option>
+                <option value="history">Historia</option>
+                <option value="cuisine">Cocina</option>
+                <option value="travel">Viajes</option>
+                <option value="space">Espacio</option>
+                <option value="biology">Biología</option>
+                <option value="philosophy">Filosofía</option>
+                <option value="stoic">Estoicismo</option>
+                <option value="art">Arte</option>
+                <option value="architecture">Arquitectura</option>
+                <option value="mathematics">Matemáticas</option>
+                <option value="literature">Literatura</option>
+                <option value="psychology">Psicología</option>
+                <option value="economics">Economía</option>
+                <option value="off" selected>Descanso</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <hr class="form-divider fade">
+
+        <!-- Longitud y tono -->
+        <div class="form-row fade">
+          <div class="form-group">
+            <label class="form-label">Longitud de lectura <em>*</em></label>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="longitud" value="1min">
+                <span class="radio-dot"></span>
+                <span class="radio-text">1 min — Una historia, lo esencial</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="longitud" value="5min" checked>
+                <span class="radio-dot"></span>
+                <span class="radio-text">5 min — Tres historias con profundidad</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="longitud" value="15min">
+                <span class="radio-dot"></span>
+                <span class="radio-text">15 min — Cinco historias completas</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="longitud" value="30min">
+                <span class="radio-dot"></span>
+                <span class="radio-text">30 min — Ocho historias en detalle</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tono de escritura <em>*</em></label>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="tono" value="Reflexivo y profundo" checked>
+                <span class="radio-dot"></span>
+                <span class="radio-text">Reflexivo y profundo</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="tono" value="Curioso y entretenido">
+                <span class="radio-dot"></span>
+                <span class="radio-text">Curioso y entretenido</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="tono" value="Directo y sin rodeos">
+                <span class="radio-dot"></span>
+                <span class="radio-text">Directo y sin rodeos</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="tono" value="Cálido y motivacional">
+                <span class="radio-dot"></span>
+                <span class="radio-text">Cálido y motivacional</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="tono" value="Analítico y detallado">
+                <span class="radio-dot"></span>
+                <span class="radio-text">Analítico y detallado</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <hr class="form-divider fade">
+
+        <!-- Idioma -->
+        <div class="form-row fade">
+          <div class="form-group">
+            <label class="form-label">Idioma <em>*</em></label>
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="idioma" value="Spanish" checked>
+                <span class="radio-dot"></span>
+                <span class="radio-text">Español</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="idioma" value="English">
+                <span class="radio-dot"></span>
+                <span class="radio-text">English</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <hr class="form-divider fade">
+
+        <!-- Hora de llegada -->
+        <div class="form-group fade">
+          <label class="form-label" for="hora">Hora de llegada</label>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem;line-height:1.6;">Elige a qué hora quieres recibir tu Magacin cada mañana (hora Chile)</p>
+          <select class="form-select" id="hora" name="hora" style="max-width:200px;">
+            <option value="06:00">6:00 am</option>
+            <option value="07:00">7:00 am</option>
+            <option value="08:00" selected>8:00 am</option>
+            <option value="09:00">9:00 am</option>
+            <option value="10:00">10:00 am</option>
+          </select>
+        </div>
+
+        <input type="hidden" id="selected-template" name="diseno" value="editorial_dark">
+
+        <!-- Submit step 1 -->
+        <div class="submit-area fade">
+          <button type="button" id="btn-continuar" class="btn-primary">
+            Continuar →
+          </button>
+        </div>
+
+        <!-- Step 2: account creation (shown if no session) -->
+        <div class="step2-panel" id="step2Panel">
+          <div class="step2-title">Crea tu cuenta</div>
+          <p class="step2-sub">Para acceder a tu portal, ver tus créditos y editar preferencias en cualquier momento.</p>
+          <div class="form-group">
+            <label class="form-label" for="reg-email">Email <em>*</em></label>
+            <input class="form-input" type="email" id="reg-email" placeholder="tu@email.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-password">Contraseña <em>*</em></label>
+            <div class="pw-wrap">
+              <input class="form-input" type="password" id="reg-password" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+              <button type="button" class="pw-toggle" data-target="reg-password">ver</button>
+            </div>
+          </div>
+          <button type="button" id="btn-crear" class="btn-primary">Crear mi Magacin →</button>
+          <p class="step2-already">¿Ya tienes cuenta? <a href="/cuenta.html">Entra aquí</a></p>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <div class="footer-brand">
+    <svg viewBox="60 60 200 200" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="160" cy="138" r="4" fill="#c8f060"/>
+      <circle cx="160" cy="138" r="40" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.9"/>
+      <circle cx="160" cy="98" r="3" fill="#fff" opacity="0.9"/><circle cx="194.6" cy="118" r="3" fill="#fff" opacity="0.9"/><circle cx="194.6" cy="158" r="3" fill="#fff" opacity="0.9"/><circle cx="160" cy="178" r="3" fill="#fff" opacity="0.9"/><circle cx="125.4" cy="158" r="3" fill="#fff" opacity="0.9"/><circle cx="125.4" cy="118" r="3" fill="#fff" opacity="0.9"/>
+      <line x1="160" y1="138" x2="160" y2="101" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="120" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="156" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="160" y2="175" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="156" stroke="#fff" stroke-width="0.5" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="120" stroke="#fff" stroke-width="0.5" opacity="0.4"/>
+    </svg>
+    <span>Z E R O &nbsp; I A</span>
+  </div>
+  <div style="font-size:.68rem;color:var(--muted);letter-spacing:.06em;">Santiago, Chile · 2025</div>
+  <div class="footer-links">
+    <a href="/">Inicio</a>
+    <a href="mailto:zero@zeroia.cl">zero@zeroia.cl</a>
+  </div>
+</footer>
+
+<script>
+/* ── Scroll fade ── */
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('on'); obs.unobserve(e.target); } });
+}, { threshold: 0.08 });
+document.querySelectorAll('.fade').forEach(el => obs.observe(el));
+
+/* ── Accordion card selection ── */
+const DESIGN_NAMES = {
+  editorial_dark: 'Editorial Oscuro',
+  minimal_white:  'Minimal Blanco',
+  magazine_bold:  'Magazine Bold',
+  dark_tech:      'Dark Tech',
+  caligrafico:    'Caligráfico',
+  nordico:        'Nórdico'
+};
+
+const hiddenTemplate = document.getElementById('selected-template');
+const accordion      = document.getElementById('tpAccordion');
+
+function selectDesign(slug) {
+  document.querySelectorAll('.tp-card').forEach(c => {
+    const sel = c.dataset.template === slug;
+    c.classList.toggle('is-selected', sel);
+    c.setAttribute('aria-checked', sel ? 'true' : 'false');
+  });
+  accordion.classList.add('has-selected');
+  if (hiddenTemplate) hiddenTemplate.value = slug;
+}
+
+document.querySelectorAll('.tp-card').forEach(card => {
+  const doSelect = () => {
+    selectDesign(card.dataset.template);
+  };
+  card.addEventListener('click', doSelect);
+  card.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doSelect(); }
+  });
+});
+
+/* CAMBIO 4 — editorial_dark selected by default */
+selectDesign('editorial_dark');
+
+/* ── Supabase SDK ── */
+const SUPABASE_URL = 'https://rgvlztbkorhhtgtqkqev.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_SAvZMvWeRi0XlX3S2avktQ_YvXzx2z8';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ── Password toggle ── */
+document.querySelectorAll('.pw-toggle').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const input = document.getElementById(this.dataset.target);
+    if (!input) return;
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    this.textContent = showing ? 'ver' : 'ocultar';
+  });
+});
+
+/* ── Build payload from form ── */
+function buildPayload(nombre, email, digestNombre) {
+  const f = document.getElementById('digestForm');
+  return {
+    name:            nombre,
+    email:           email,
+    digest_name:     digestNombre,
+    design:          hiddenTemplate.value,
+    read_length:     f.querySelector('[name=longitud]:checked')?.value  || '15min',
+    tone:            f.querySelector('[name=tono]:checked')?.value      || 'curious and engaging',
+    language:        f.querySelector('[name=idioma]:checked')?.value    || 'Spanish',
+    send_hour:       f.hora?.value                                      || '08:00',
+    topic_monday:    f.lunes.value,
+    topic_tuesday:   f.martes.value,
+    topic_wednesday: f.miercoles.value,
+    topic_thursday:  f.jueves.value,
+    topic_friday:    f.viernes.value,
+    topic_saturday:  f.sabado.value,
+    topic_sunday:    f.domingo.value,
+    credits: 0,
+    active:  true
+  };
+}
+
+/* ── Submit to Supabase ── */
+async function submitSubscriber(nombre, email, digestNombre, password = null) {
+  const payload = buildPayload(nombre, email, digestNombre);
+
+  const { error: insertError } = await supabaseClient
+    .from('subscribers')
+    .insert(payload);
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      alert('Este email ya está registrado. ¡Ya tienes un Magacin!');
+    } else {
+      alert('Hubo un error al registrarte. Por favor intenta de nuevo.');
+      console.error('Supabase insert error:', insertError);
+    }
+    return false;
+  }
+
+  if (password) {
+    await supabaseClient.auth.signUp({ email, password });
+  }
+
+  document.getElementById('formulario').innerHTML = `
+    <div style="max-width:560px;margin:80px auto;text-align:center;padding:0 2rem;">
+      <div style="font-size:2.5rem;margin-bottom:1.5rem;">✓</div>
+      <h2 style="font-size:1.8rem;font-weight:300;margin-bottom:1rem;color:#f5f5f5;">¡Casi listo!</h2>
+      <p style="color:#666660;font-size:.95rem;line-height:1.8;">
+        Te enviamos un email de confirmación a <strong style="color:#f5f5f5;">${email}</strong>.<br>
+        Haz click en el link para activar tu cuenta y luego entra a Mi Magacin.
+      </p>
+      <a href="/cuenta.html" style="display:inline-block;margin-top:1.5rem;color:#a3e635;font-size:.88rem;">Ir a Mi Magacin →</a>
+    </div>`;
+  return true;
+}
+
+/* ── Paso 1: Continuar ── */
+document.getElementById('btn-continuar').addEventListener('click', async function() {
+  const nombre       = document.getElementById('nombre').value.trim();
+  const digestNombre = document.getElementById('digestNombre').value.trim();
+
+  if (!nombre || !digestNombre) {
+    alert('Por favor ingresa tu nombre y el nombre de tu Magacin.');
+    return;
+  }
+
+  this.disabled = true;
+  this.textContent = 'Verificando…';
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+
+  if (session) {
+    await submitSubscriber(nombre, session.user.email, digestNombre);
+  } else {
+    this.disabled = false;
+    this.textContent = 'Continuar →';
+    document.getElementById('step2Panel').classList.add('visible');
+    document.getElementById('reg-email').focus();
+  }
+});
+
+/* ── Paso 2: Crear mi Magacin ── */
+document.getElementById('btn-crear').addEventListener('click', async function() {
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+
+  if (!email) { alert('Por favor ingresa tu email.'); return; }
+  if (password.length < 8) { alert('La contraseña debe tener al menos 8 caracteres.'); return; }
+
+  this.disabled = true;
+  this.textContent = 'Creando tu Magacin…';
+
+  const nombre       = document.getElementById('nombre').value.trim();
+  const digestNombre = document.getElementById('digestNombre').value.trim();
+
+  const ok = await submitSubscriber(nombre, email, digestNombre, password);
+  if (!ok) {
+    this.disabled = false;
+    this.textContent = 'Crear mi Magacin →';
+  }
+});
+
+/* ── Enter key triggers active button ── */
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter' || e.target.tagName === 'SELECT') return;
+  const step2 = document.getElementById('step2Panel');
+  if (step2 && step2.classList.contains('visible')) {
+    document.getElementById('btn-crear').click();
+  } else {
+    document.getElementById('btn-continuar').click();
+  }
+});
+</script>
+</body>
+</html>

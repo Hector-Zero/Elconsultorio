@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="Mi Magacin — Tu portal de usuario Zero">
+<title>Mi Magacin — Zero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#080808;--bg2:#0f0f0f;--bg3:#161616;
+  --text:#f5f5f5;--muted:#666660;--muted2:#444440;
+  --accent:#c8f060;--accent2:#a8d040;
+  --lime:#a3e635;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
+  --surface:#141414;
+}
+html{scroll-behavior:smooth;overflow-x:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;font-weight:300;line-height:1.6;overflow-x:hidden;min-height:100vh;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 2.5rem;border-bottom:1px solid var(--border);background:rgba(8,8,8,0.92);backdrop-filter:blur(16px);}
+.logo-nav{display:flex;align-items:center;gap:.875rem;text-decoration:none;}
+.logo-nav svg{width:44px;height:44px;}
+.logo-wordmark{font-size:.7rem;font-weight:300;letter-spacing:.38em;color:var(--text);text-transform:uppercase;}
+.nav-links{display:flex;align-items:center;gap:2.5rem;}
+.nav-links a{font-size:.78rem;font-weight:300;letter-spacing:.04em;color:var(--muted);text-decoration:none;transition:color .2s;}
+.nav-links a:hover{color:var(--text);}
+.btn-cta{display:inline-flex;align-items:center;gap:.4rem;background:var(--accent);color:#080808;font-size:.78rem;font-weight:500;padding:.5rem 1.1rem;border-radius:2px;text-decoration:none;transition:background .2s,transform .15s;}
+.btn-cta:hover{background:var(--accent2);transform:translateY(-1px);}
+#nav-logout{display:none;background:none;border:1px solid var(--border2);color:var(--muted);font-size:.78rem;font-family:inherit;font-weight:300;padding:.4rem .9rem;border-radius:2px;cursor:pointer;transition:color .2s,border-color .2s;}
+#nav-logout:hover{color:var(--text);border-color:var(--muted);}
+
+/* MAIN */
+main{padding-top:100px;padding-bottom:80px;max-width:860px;margin:0 auto;padding-left:max(2rem,5vw);padding-right:max(2rem,5vw);}
+
+/* LOGIN */
+#view-login{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:0;}
+.login-box{width:100%;max-width:420px;}
+.login-title{font-size:1.8rem;font-weight:300;letter-spacing:-.02em;margin-bottom:.4rem;}
+.login-sub{font-size:.88rem;color:var(--muted);margin-bottom:2.5rem;}
+.login-tabs{display:flex;gap:0;border-bottom:1px solid var(--border2);margin-bottom:2rem;}
+.tab-btn{background:none;border:none;color:var(--muted);font-family:inherit;font-size:.82rem;font-weight:400;padding:.6rem 1.2rem .7rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .2s,border-color .2s;}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--lime);}
+.field{margin-bottom:1.2rem;}
+.field label{display:block;font-size:.75rem;letter-spacing:.06em;color:var(--muted);margin-bottom:.4rem;text-transform:uppercase;}
+.field input{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:inherit;font-size:.9rem;font-weight:300;padding:.7rem 1rem;border-radius:4px;outline:none;transition:border-color .2s;}
+.field input:focus{border-color:var(--lime);}
+.btn-primary{width:100%;background:var(--lime);color:#080808;font-family:inherit;font-size:.88rem;font-weight:500;padding:.8rem;border:none;border-radius:4px;cursor:pointer;transition:background .2s;margin-top:.4rem;}
+.btn-primary:hover{background:var(--accent2);}
+.login-msg{font-size:.82rem;color:var(--muted);margin-top:1rem;text-align:center;min-height:1.2rem;}
+.login-msg.error{color:#ff6b6b;}
+.login-msg.success{color:var(--lime);}
+.forgot-link{display:block;text-align:center;font-size:.78rem;color:var(--muted);margin-top:.8rem;cursor:pointer;text-decoration:underline;}
+.forgot-link:hover{color:var(--text);}
+
+/* DASHBOARD */
+#view-dashboard{display:none;}
+.dash-header{margin-bottom:3rem;}
+.dash-greeting{font-size:2rem;font-weight:300;letter-spacing:-.02em;}
+.dash-greeting strong{font-weight:600;color:var(--accent);}
+.dash-sub{font-size:.9rem;color:var(--muted);margin-top:.3rem;}
+.dash-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:3rem;}
+.dash-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1.5rem;}
+.dash-card-label{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;}
+.dash-card-value{font-size:2.2rem;font-weight:600;letter-spacing:-.03em;line-height:1;}
+.dash-card-value.credits-val{color:var(--accent);}
+.dash-card-desc{font-size:.78rem;color:var(--muted);margin-top:.4rem;}
+
+/* PREFS */
+.section-title{font-size:1.1rem;font-weight:500;letter-spacing:-.01em;margin-bottom:1.5rem;padding-bottom:.75rem;border-bottom:1px solid var(--border);}
+.prefs-section{margin-bottom:2.5rem;}
+.topics-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.5rem;}
+.topic-day{display:flex;flex-direction:column;gap:.3rem;}
+.topic-day-label{font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:center;}
+.topic-day select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:inherit;font-size:.75rem;padding:.45rem .3rem;border-radius:4px;width:100%;outline:none;cursor:pointer;text-align:center;}
+.topic-day select:focus{border-color:var(--lime);}
+.radio-row{display:flex;flex-wrap:wrap;gap:.6rem;}
+.radio-pill{display:flex;align-items:center;gap:.4rem;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:.35rem .9rem;cursor:pointer;transition:border-color .2s;}
+.radio-pill input{display:none;}
+.radio-pill span{font-size:.8rem;color:var(--muted);transition:color .2s;}
+.radio-pill:has(input:checked){border-color:var(--lime);}
+.radio-pill:has(input:checked) span{color:var(--text);}
+
+/* MINI ACCORDION */
+.mini-accordion{display:flex;gap:5px;height:120px;}
+.mc{position:relative;width:60px;height:120px;border-radius:8px;overflow:hidden;cursor:pointer;flex-shrink:0;transition:width .35s cubic-bezier(.4,0,.2,1),border-color .2s;border:1.5px solid transparent;border-left:3px solid var(--card-accent,#a3e635);background:var(--surface);}
+.mc[data-t="editorial_dark"]{--card-accent:#c8a96e;}
+.mc[data-t="minimal_white"]{--card-accent:#e8e8e8;}
+.mc[data-t="magazine_bold"]{--card-accent:#ff3333;}
+.mc[data-t="dark_tech"]{--card-accent:#00ff41;}
+.mc[data-t="caligrafico"]{--card-accent:#c4a882;}
+.mc[data-t="nordico"]{--card-accent:#6b9bd2;}
+.mini-accordion:has(.mc:hover) .mc:not(:hover){width:40px;}
+.mc:hover{width:220px;}
+.mc.sel{width:220px;border:2px solid var(--lime);}
+.mini-accordion.has-sel .mc:not(.sel):not(:hover){width:40px;}
+.mc-vl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;font-size:9px;font-weight:500;color:rgba(255,255,255,.6);pointer-events:none;white-space:nowrap;transition:opacity .1s;z-index:3;}
+.mc:hover .mc-vl,.mc.sel .mc-vl{opacity:0;}
+.mc-name{position:absolute;bottom:0;left:0;right:0;padding:8px 10px 9px;background:rgba(6,6,6,.88);font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .15s .18s;z-index:2;}
+.mc:hover .mc-name,.mc.sel .mc-name{opacity:1;}
+.mc-bg{position:absolute;inset:0;z-index:1;}
+.mc-bg-editorial{background:linear-gradient(160deg,#1a1a1a 0%,#111 100%);}
+.mc-bg-minimal{background:linear-gradient(160deg,#f0f0f0 0%,#e0e0e0 100%);}
+.mc-bg-magazine{background:linear-gradient(160deg,#1a0000 0%,#2d0000 100%);}
+.mc-bg-darktech{background:linear-gradient(160deg,#001a00 0%,#002200 100%);}
+.mc-bg-caligrafic{background:linear-gradient(160deg,#1a1510 0%,#120f0a 100%);}
+.mc-bg-nordico{background:linear-gradient(160deg,#0d1824 0%,#162030 100%);}
+
+.btn-save{background:var(--lime);color:#080808;font-family:inherit;font-size:.88rem;font-weight:500;padding:.8rem 2.5rem;border:none;border-radius:4px;cursor:pointer;transition:background .2s,transform .15s;margin-top:.5rem;}
+.btn-save:hover{background:var(--accent2);transform:translateY(-1px);}
+.save-msg{font-size:.82rem;color:var(--muted);margin-left:1rem;opacity:0;transition:opacity .3s;}
+.save-msg.visible{opacity:1;}
+
+/* PAYMENT PACKAGES */
+.pay-section{margin-bottom:3rem;}
+.pay-packages{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:1.5rem;}
+.pay-pkg{position:relative;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:1.4rem 1.2rem 1.2rem;display:flex;flex-direction:column;gap:.5rem;text-decoration:none;color:var(--text);transition:border-color .2s,transform .15s;}
+.pay-pkg:hover{border-color:var(--muted);transform:translateY(-2px);}
+.pay-pkg.popular{border-color:var(--lime);}
+.pay-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--lime);color:#080808;font-size:.62rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.2rem .65rem;border-radius:20px;white-space:nowrap;}
+.pay-pkg-name{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.pay-pkg-credits{font-size:1.6rem;font-weight:600;letter-spacing:-.03em;color:var(--accent);line-height:1;}
+.pay-pkg-credits span{font-size:.82rem;font-weight:300;color:var(--muted);margin-left:.2rem;}
+.pay-pkg-price{font-size:.88rem;font-weight:400;color:var(--text);}
+.pay-pkg-btn{display:block;text-align:center;background:var(--bg);border:1px solid var(--border2);color:var(--muted);font-size:.78rem;font-weight:400;padding:.5rem;border-radius:4px;margin-top:.4rem;transition:background .2s,color .2s,border-color .2s;}
+.pay-pkg:hover .pay-pkg-btn{background:var(--lime);color:#080808;border-color:var(--lime);}
+
+@media(max-width:600px){
+  .dash-cards{grid-template-columns:1fr;}
+  .topics-grid{grid-template-columns:repeat(4,1fr);}
+  .pay-packages{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<script>
+/* Detect Supabase email-confirmation redirect and auto-login */
+(function() {
+  var hash = window.location.hash;
+  if (hash && hash.includes('access_token')) {
+    var params = new URLSearchParams(hash.substring(1));
+    var accessToken = params.get('access_token');
+    var refreshToken = params.get('refresh_token');
+    if (accessToken) {
+      var _sb = supabase.createClient(
+        'https://rgvlztbkorhhtgtqkqev.supabase.co',
+        'sb_publishable_SAvZMvWeRi0XlX3S2avktQ_YvXzx2z8'
+      );
+      _sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(function() {
+          window.location.hash = '';
+          window.location.reload();
+        });
+    }
+  }
+})();
+</script>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="logo-nav">
+    <svg viewBox="60 60 200 200" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="160" cy="138" r="4" fill="#c8f060"/>
+      <circle cx="160" cy="138" r="40" fill="none" stroke="#fff" stroke-width="1" opacity="0.9"/>
+      <circle cx="160" cy="98" r="3" fill="#fff" opacity="0.9"/><circle cx="194.6" cy="118" r="3" fill="#fff" opacity="0.9"/><circle cx="194.6" cy="158" r="3" fill="#fff" opacity="0.9"/><circle cx="160" cy="178" r="3" fill="#fff" opacity="0.9"/><circle cx="125.4" cy="158" r="3" fill="#fff" opacity="0.9"/><circle cx="125.4" cy="118" r="3" fill="#fff" opacity="0.9"/>
+      <line x1="160" y1="138" x2="160" y2="101" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="120" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="192" y2="156" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="160" y2="175" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="156" stroke="#fff" stroke-width="0.6" opacity="0.4"/><line x1="160" y1="138" x2="128" y2="120" stroke="#fff" stroke-width="0.6" opacity="0.4"/>
+      <circle cx="160" cy="98" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="194.6" cy="118" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="194.6" cy="158" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="160" cy="178" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="125.4" cy="158" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/><circle cx="125.4" cy="118" r="18" fill="none" stroke="#fff" stroke-width="0.7" opacity="0.5"/>
+    </svg>
+    <span class="logo-wordmark">Z E R O</span>
+  </a>
+  <div class="nav-links">
+    <a href="/">Inicio</a>
+    <a href="/cuenta.html" id="nav-magacin">Mi Magacin →</a>
+    <button id="nav-logout">Cerrar sesión</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- LOGIN VIEW -->
+  <div id="view-login">
+    <div class="login-box">
+      <h1 class="login-title">Mi Magacin</h1>
+      <p class="login-sub">Accede para ver y editar tus preferencias.</p>
+
+      <div class="login-tabs">
+        <button class="tab-btn active" id="tab-login-btn">Entrar</button>
+        <button class="tab-btn" id="tab-reset-btn">Recuperar acceso</button>
+      </div>
+
+      <!-- Login form -->
+      <div id="panel-login">
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="tu@email.com" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="login-password">Contraseña</label>
+          <div style="position:relative;">
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" style="width:100%;padding-right:3.5rem;">
+            <button type="button" onclick="(function(b){var i=document.getElementById('login-password');var s=i.type==='text';i.type=s?'password':'text';b.textContent=s?'ver':'ocultar';})(this)" style="position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--lime);font-size:.72rem;font-family:inherit;cursor:pointer;padding:0;">ver</button>
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-login">Entrar</button>
+        <p class="login-msg" id="login-msg"></p>
+      </div>
+
+      <!-- Reset form -->
+      <div id="panel-reset" style="display:none;">
+        <div class="field">
+          <label for="reset-email">Email</label>
+          <input type="email" id="reset-email" placeholder="tu@email.com" autocomplete="email">
+        </div>
+        <button class="btn-primary" id="btn-reset">Enviar enlace de acceso</button>
+        <p class="login-msg" id="reset-msg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="view-dashboard">
+
+    <div class="dash-header">
+      <h1 class="dash-greeting">Hola, <strong id="dash-name">—</strong></h1>
+      <p class="dash-sub">Tu Magacin personal · <span id="dash-digest-name">—</span></p>
+    </div>
+
+    <div class="dash-cards">
+      <div class="dash-card">
+        <div class="dash-card-label">Créditos disponibles</div>
+        <div class="dash-card-value credits-val" id="dash-credits">—</div>
+        <div class="dash-card-desc">Cada entrega consume 1 crédito</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-label">Próxima entrega</div>
+        <div class="dash-card-value" id="dash-next" style="font-size:1.5rem;">—</div>
+        <div class="dash-card-desc" id="dash-next-topic">—</div>
+      </div>
+    </div>
+
+    <!-- PAYMENT PACKAGES -->
+    <div class="pay-section">
+      <div class="section-title">Recargar créditos</div>
+      <div class="pay-packages">
+
+        <a class="pay-pkg" data-href="https://www.mercadopago.cl/subscriptions/checkout?preapproval_plan_id=0e5b85d312864e0d9bbbc6fb0b12a457" href="#">
+          <div class="pay-pkg-name">Starter</div>
+          <div class="pay-pkg-credits">10 <span>entregas</span></div>
+          <div class="pay-pkg-price">$3.000 CLP</div>
+          <div class="pay-pkg-btn">Comprar →</div>
+        </a>
+
+        <a class="pay-pkg popular" data-href="https://www.mercadopago.cl/subscriptions/checkout?preapproval_plan_id=e9362aad437d4bc3bb6f54b11675cbd2" href="#">
+          <div class="pay-badge">Más popular</div>
+          <div class="pay-pkg-name">Regular</div>
+          <div class="pay-pkg-credits">30 <span>entregas</span></div>
+          <div class="pay-pkg-price">$8.000 CLP</div>
+          <div class="pay-pkg-btn">Comprar →</div>
+        </a>
+
+        <a class="pay-pkg" data-href="https://www.mercadopago.cl/subscriptions/checkout?preapproval_plan_id=27959d2daa5b43c2b92ccde0fabba1a2" href="#">
+          <div class="pay-pkg-name">Trimestral</div>
+          <div class="pay-pkg-credits">90 <span>entregas</span></div>
+          <div class="pay-pkg-price">$20.000 CLP</div>
+          <div class="pay-pkg-btn">Comprar →</div>
+        </a>
+
+      </div>
+    </div>
+
+    <!-- PREFERENCES -->
+    <form id="prefs-form">
+
+      <div class="prefs-section">
+        <div class="section-title">Temas por día</div>
+        <div class="topics-grid">
+          <div class="topic-day">
+            <span class="topic-day-label">Lun</span>
+            <select name="topic_monday" id="pref-lunes"></select>
+          </div>
+          <div class="topic-day">
+            <span class="topic-day-label">Mar</span>
+            <select name="topic_tuesday" id="pref-martes"></select>
+          </div>
+          <div class="topic-day">
+            <span class="topic-day-label">Mié</span>
+            <select name="topic_wednesday" id="pref-miercoles"></select>
+          </div>
+          <div class="topic-day">
+            <span class="topic-day-label">Jue</span>
+            <select name="topic_thursday" id="pref-jueves"></select>
+          </div>
+          <div class="topic-day">
+            <span class="topic-day-label">Vie</span>
+            <select name="topic_friday" id="pref-viernes"></select>
+          </div>
+          <div class="topic-day">
+            <span class="topic-day-label">Sáb</span>
+            <select name="topic_saturday" id="pref-sabado"></select>
+          </div>
+          <div class="topic-day">
+            <span class="topic-day-label">Dom</span>
+            <select name="topic_sunday" id="pref-domingo"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="prefs-section">
+        <div class="section-title">Duración de lectura</div>
+        <div class="radio-row" id="pref-longitud">
+          <label class="radio-pill"><input type="radio" name="read_length" value="5min"><span>5 min</span></label>
+          <label class="radio-pill"><input type="radio" name="read_length" value="10min"><span>10 min</span></label>
+          <label class="radio-pill"><input type="radio" name="read_length" value="15min"><span>15 min</span></label>
+          <label class="radio-pill"><input type="radio" name="read_length" value="20min"><span>20 min</span></label>
+        </div>
+      </div>
+
+      <div class="prefs-section">
+        <div class="section-title">Tono del Magacin</div>
+        <div class="radio-row" id="pref-tono">
+          <label class="radio-pill"><input type="radio" name="tone" value="curious and engaging"><span>Curioso y cercano</span></label>
+          <label class="radio-pill"><input type="radio" name="tone" value="formal and analytical"><span>Formal y analítico</span></label>
+          <label class="radio-pill"><input type="radio" name="tone" value="witty and irreverent"><span>Irónico e irreverente</span></label>
+          <label class="radio-pill"><input type="radio" name="tone" value="poetic and contemplative"><span>Poético</span></label>
+        </div>
+      </div>
+
+      <div class="prefs-section">
+        <div class="section-title">Diseño</div>
+        <div class="mini-accordion" id="miniAccordion">
+          <div class="mc sel" data-t="editorial_dark">
+            <div class="mc-bg mc-bg-editorial"></div>
+            <div class="mc-vl">Editorial Oscuro</div>
+            <div class="mc-name">Editorial Oscuro</div>
+          </div>
+          <div class="mc" data-t="minimal_white">
+            <div class="mc-bg mc-bg-minimal"></div>
+            <div class="mc-vl">Minimalista</div>
+            <div class="mc-name">Minimalista</div>
+          </div>
+          <div class="mc" data-t="magazine_bold">
+            <div class="mc-bg mc-bg-magazine"></div>
+            <div class="mc-vl">Magazine Bold</div>
+            <div class="mc-name">Magazine Bold</div>
+          </div>
+          <div class="mc" data-t="dark_tech">
+            <div class="mc-bg mc-bg-darktech"></div>
+            <div class="mc-vl">Dark Tech</div>
+            <div class="mc-name">Dark Tech</div>
+          </div>
+          <div class="mc" data-t="caligrafico">
+            <div class="mc-bg mc-bg-caligrafic"></div>
+            <div class="mc-vl">Caligráfico</div>
+            <div class="mc-name">Caligráfico</div>
+          </div>
+          <div class="mc" data-t="nordico">
+            <div class="mc-bg mc-bg-nordico"></div>
+            <div class="mc-vl">Nórdico</div>
+            <div class="mc-name">Nórdico</div>
+          </div>
+        </div>
+        <input type="hidden" id="pref-design" name="design" value="editorial_dark">
+      </div>
+
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin-top:1rem;">
+        <button type="submit" class="btn-save">Guardar cambios</button>
+        <span class="save-msg" id="save-msg">¡Guardado correctamente!</span>
+      </div>
+
+    </form>
+  </div><!-- /view-dashboard -->
+
+</main>
+
+<script>
+const SUPABASE_URL = 'https://rgvlztbkorhhtgtqkqev.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_SAvZMvWeRi0XlX3S2avktQ_YvXzx2z8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TOPICS = ['off','science','technology','history','biology','ai','philosophy','art','economics','politics','culture','sports','health','space','environment','psychology','literature','music','cinema','architecture'];
+
+/* ── populate selects ── */
+document.querySelectorAll('.topic-day select').forEach(sel => {
+  TOPICS.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t;
+    o.textContent = t === 'off' ? '— libre —' : t.charAt(0).toUpperCase() + t.slice(1);
+    sel.appendChild(o);
+  });
+});
+
+/* ── tab switch ── */
+document.getElementById('tab-login-btn').addEventListener('click', () => {
+  document.getElementById('tab-login-btn').classList.add('active');
+  document.getElementById('tab-reset-btn').classList.remove('active');
+  document.getElementById('panel-login').style.display = '';
+  document.getElementById('panel-reset').style.display = 'none';
+});
+document.getElementById('tab-reset-btn').addEventListener('click', () => {
+  document.getElementById('tab-reset-btn').classList.add('active');
+  document.getElementById('tab-login-btn').classList.remove('active');
+  document.getElementById('panel-reset').style.display = '';
+  document.getElementById('panel-login').style.display = 'none';
+});
+
+/* ── mini accordion ── */
+let selectedDesign = 'editorial_dark';
+const miniAcc = document.getElementById('miniAccordion');
+miniAcc.querySelectorAll('.mc').forEach(card => {
+  card.addEventListener('click', () => {
+    miniAcc.querySelectorAll('.mc').forEach(c => c.classList.remove('sel'));
+    card.classList.add('sel');
+    miniAcc.classList.add('has-sel');
+    selectedDesign = card.dataset.t;
+    document.getElementById('pref-design').value = selectedDesign;
+  });
+});
+
+/* ── session check ── */
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    showDashboard(session.user.email);
+  }
+}
+init();
+
+/* ── LOGIN ── */
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const msg      = document.getElementById('login-msg');
+  if (!email || !password) { setMsg(msg, 'Completa email y contraseña.', 'error'); return; }
+
+  setMsg(msg, 'Entrando…', '');
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    setMsg(msg, 'Email o contraseña incorrectos.', 'error');
+  } else {
+    showDashboard(email);
+  }
+});
+
+/* ── RESET ── */
+document.getElementById('btn-reset').addEventListener('click', async () => {
+  const email = document.getElementById('reset-email').value.trim();
+  const msg   = document.getElementById('reset-msg');
+  if (!email) { setMsg(msg, 'Escribe tu email.', 'error'); return; }
+
+  setMsg(msg, 'Enviando…', '');
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: `${location.origin}/cuenta.html`
+  });
+  if (error) {
+    setMsg(msg, 'No pudimos enviar el email.', 'error');
+  } else {
+    setMsg(msg, 'Revisa tu bandeja de entrada.', 'success');
+  }
+});
+
+/* ── LOGOUT ── */
+document.getElementById('nav-logout').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  document.getElementById('view-dashboard').style.display = 'none';
+  document.getElementById('view-login').style.display = 'flex';
+  document.getElementById('nav-logout').style.display = 'none';
+  document.getElementById('nav-magacin').style.display = '';
+});
+
+/* ── DASHBOARD ── */
+async function showDashboard(email) {
+  document.getElementById('view-login').style.display = 'none';
+  document.getElementById('view-dashboard').style.display = 'block';
+  document.getElementById('nav-logout').style.display = 'inline-flex';
+  document.getElementById('nav-magacin').style.display = 'none';
+
+  const { data, error } = await sb
+    .from('subscribers')
+    .select('*')
+    .eq('email', email)
+    .single();
+
+  if (error || !data) return;
+
+  document.getElementById('dash-name').textContent        = data.name;
+  document.getElementById('dash-digest-name').textContent = data.digest_name;
+  document.getElementById('dash-credits').textContent     = data.credits;
+
+  /* Next delivery */
+  const days = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  const topics = [data.topic_sunday,data.topic_monday,data.topic_tuesday,data.topic_wednesday,data.topic_thursday,data.topic_friday,data.topic_saturday];
+  const today = new Date().getDay();
+  let nextDay = -1, nextTopic = '';
+  for (let i = 1; i <= 7; i++) {
+    const idx = (today + i) % 7;
+    if (topics[idx] && topics[idx] !== 'off') { nextDay = idx; nextTopic = topics[idx]; break; }
+  }
+  document.getElementById('dash-next').textContent       = nextDay >= 0 ? days[nextDay] : 'Sin entregas';
+  document.getElementById('dash-next-topic').textContent = nextTopic ? `Tema: ${nextTopic}` : 'Todos los días en libre';
+
+  /* Populate topic selects */
+  const dayMap = [
+    ['pref-lunes','topic_monday'],['pref-martes','topic_tuesday'],
+    ['pref-miercoles','topic_wednesday'],['pref-jueves','topic_thursday'],
+    ['pref-viernes','topic_friday'],['pref-sabado','topic_saturday'],
+    ['pref-domingo','topic_sunday']
+  ];
+  dayMap.forEach(([id, key]) => {
+    const sel = document.getElementById(id);
+    if (sel && data[key]) sel.value = data[key];
+  });
+
+  /* Read length */
+  const rl = document.querySelector(`[name=read_length][value="${data.read_length}"]`);
+  if (rl) rl.checked = true;
+
+  /* Tone */
+  const tone = document.querySelector(`[name=tone][value="${data.tone}"]`);
+  if (tone) tone.checked = true;
+
+  /* Design */
+  if (data.design) {
+    miniAcc.querySelectorAll('.mc').forEach(c => c.classList.remove('sel'));
+    const card = miniAcc.querySelector(`[data-t="${data.design}"]`);
+    if (card) { card.classList.add('sel'); miniAcc.classList.add('has-sel'); }
+    selectedDesign = data.design;
+    document.getElementById('pref-design').value = data.design;
+  }
+}
+
+/* ── SAVE PREFS ── */
+document.getElementById('prefs-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return;
+
+  const f = this;
+  const update = {
+    topic_monday:    f.topic_monday.value,
+    topic_tuesday:   f.topic_tuesday.value,
+    topic_wednesday: f.topic_wednesday.value,
+    topic_thursday:  f.topic_thursday.value,
+    topic_friday:    f.topic_friday.value,
+    topic_saturday:  f.topic_saturday.value,
+    topic_sunday:    f.topic_sunday.value,
+    read_length: f.querySelector('[name=read_length]:checked')?.value || '15min',
+    tone:        f.querySelector('[name=tone]:checked')?.value        || 'curious and engaging',
+    design:      selectedDesign
+  };
+
+  const { error } = await sb
+    .from('subscribers')
+    .update(update)
+    .eq('email', session.user.email);
+
+  const msg = document.getElementById('save-msg');
+  if (error) {
+    msg.textContent = 'Error al guardar.';
+    msg.style.color = '#ff6b6b';
+  } else {
+    msg.textContent = '¡Guardado correctamente!';
+    msg.style.color = 'var(--lime)';
+  }
+  msg.classList.add('visible');
+  setTimeout(() => msg.classList.remove('visible'), 3000);
+});
+
+/* ── Payment package click: inject payer_email ── */
+document.querySelectorAll('.pay-pkg').forEach(pkg => {
+  pkg.addEventListener('click', async function(e) {
+    e.preventDefault();
+    const base = this.dataset.href;
+    if (!base) return;
+    const { data: { session } } = await sb.auth.getSession();
+    const email = session?.user?.email || '';
+    const url = email ? `${base}&payer_email=${encodeURIComponent(email)}` : base;
+    window.open(url, '_blank', 'noopener');
+  });
+});
+
+function setMsg(el, text, type) {
+  el.textContent = text;
+  el.className = 'login-msg' + (type ? ' ' + type : '');
+}
+
+/* ── Enter key triggers active button ── */
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  if (document.getElementById('view-dashboard').style.display === 'block') return;
+  const resetVisible = document.getElementById('panel-reset').style.display !== 'none';
+  if (resetVisible) {
+    document.getElementById('btn-reset').click();
+  } else {
+    document.getElementById('btn-login').click();
+  }
+});
+</script>
+</body>
+</html>
