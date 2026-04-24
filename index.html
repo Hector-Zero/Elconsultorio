@@ -60,16 +60,13 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 
 /* ── HERO ── */
 .hero{border-bottom:3px double var(--rule-2);}
-.hero-mast{padding:40px 0 26px;}
-.hero-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;}
-.hero-meta-item{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);}
-@media(max-width:640px){.hero-meta-item:not(.hero-meta-center){display:none;}}
-.hero-logotype{font-family:'Fraunces',serif;font-size:clamp(80px,11vw,140px);font-weight:400;font-style:italic;letter-spacing:-.04em;line-height:.88;color:var(--petrol);font-variation-settings:"opsz" 144;display:block;text-align:center;margin:0 0 16px;}
+.hero-mast{padding:40px 0 20px;border-bottom:1px solid var(--rule);}
+.hero-logotype{font-family:'Fraunces',serif;font-size:clamp(80px,11vw,140px);font-weight:400;font-style:italic;letter-spacing:-.04em;line-height:.88;color:var(--petrol);font-variation-settings:"opsz" 144;display:block;text-align:center;margin:0 0 14px;}
 .hero-logotype .dot{color:var(--terracotta);}
-.hero-tagline{font-family:'Fraunces',serif;font-size:clamp(14px,1.5vw,18px);font-style:italic;color:var(--mute);text-align:center;max-width:580px;margin:0 auto;}
+.hero-tagline{font-family:'Fraunces',serif;font-size:clamp(14px,1.5vw,18px);font-style:italic;color:var(--mute);text-align:center;max-width:480px;margin:0 auto;}
 
 /* ── HERO BODY ── */
-.hero-body{padding:56px 0 72px;}
+.hero-body{padding:28px 0 64px;}
 .hero-cols{display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:start;}
 @media(max-width:940px){.hero-cols{grid-template-columns:1fr;gap:52px;}}
 .hero-manifesto-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--terracotta);margin-bottom:22px;text-align:center;}
@@ -154,23 +151,28 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 .persona-desc{font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:var(--mute);line-height:1.6;}
 
 /* ── PRICING ── */
-.pricing-inner{display:grid;grid-template-columns:55fr 45fr;gap:0;align-items:center;}
+.pricing-section{padding:0!important;}
+.pricing-inner{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;}
 @media(max-width:900px){.pricing-inner{grid-template-columns:1fr;}}
-.price-dark-card{background:#1b2a4a;padding:52px 44px;}
-.price-dark-amount{font-family:'Fraunces',serif;font-size:clamp(64px,6vw,88px);font-weight:600;line-height:1;color:#c9943a;letter-spacing:-.04em;}
-.price-dark-period{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(250,246,238,.38);margin-top:8px;}
-.price-dark-rule{height:1px;background:rgba(250,246,238,.12);margin:28px 0;}
-.price-dark-features{list-style:none;margin-bottom:36px;}
-.price-dark-features li{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:rgba(250,246,238,.82);padding:13px 0;border-bottom:1px solid rgba(250,246,238,.1);display:flex;align-items:baseline;gap:12px;line-height:1.4;}
-.price-dark-features li:first-child{border-top:1px solid rgba(250,246,238,.1);}
-.price-dark-features li::before{content:"—";color:#c9943a;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0;}
-.price-dark-cta{display:block;width:100%;text-align:center;background:#c9943a;color:#1b2a4a;padding:16px 28px;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;letter-spacing:.02em;transition:background .25s;border:none;cursor:pointer;}
-.price-dark-cta:hover{background:#e0a94a;}
-.price-light-col{padding:0 52px;}
-@media(max-width:900px){.price-light-col{padding:0;margin-top:40px;}}
-.price-promise-title{font-family:'Fraunces',serif;font-size:28px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.02em;margin-bottom:16px;line-height:1.1;}
-.price-promise{font-family:'Fraunces',serif;font-style:italic;font-size:16px;color:var(--mute);line-height:1.75;}
-.price-tag-line{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute-2);margin-top:22px;}
+.price-dark-col{background:#1b2a4a;padding:72px 56px;display:flex;flex-direction:column;}
+.price-dark-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--terracotta);margin-bottom:28px;}
+.price-dark-title{font-family:'Fraunces',serif;font-size:clamp(44px,5vw,68px);font-style:italic;font-weight:400;line-height:1.0;letter-spacing:-.03em;color:rgba(250,246,238,.92);margin-bottom:24px;font-variation-settings:"opsz" 144;}
+.price-dark-title .accent{color:#c9943a;display:block;}
+.price-dark-text{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:rgba(250,246,238,.58);line-height:1.72;margin-bottom:36px;flex:1;max-width:420px;}
+.price-dark-cta{display:inline-block;background:#c9943a;color:#1b2a4a;padding:15px 32px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;letter-spacing:.03em;transition:background .25s;border:none;cursor:pointer;align-self:flex-start;}
+.price-dark-cta:hover{background:#dba348;}
+.price-card-col{background:var(--cream);padding:72px 56px;display:flex;align-items:center;justify-content:center;}
+@media(max-width:900px){.price-dark-col,.price-card-col{padding:52px 32px;}}
+.price-card-inner{background:#fff;border:1px solid #e0d9cc;box-shadow:0 8px 28px -8px rgba(40,30,15,.18);padding:36px 32px;width:100%;max-width:360px;}
+.price-card-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);margin-bottom:18px;}
+.price-card-amount-row{display:flex;align-items:baseline;gap:6px;margin-bottom:8px;}
+.price-card-amount{font-family:'Fraunces',serif;font-size:clamp(52px,5vw,68px);font-weight:600;line-height:1;color:#c9943a;letter-spacing:-.04em;}
+.price-card-period{font-family:'Fraunces',serif;font-style:italic;font-size:18px;color:var(--mute);}
+.price-card-tagline{font-family:'Fraunces',serif;font-style:italic;font-size:13px;color:var(--mute);margin-bottom:22px;}
+.price-card-features{list-style:none;}
+.price-card-features li{font-family:'Fraunces',serif;font-style:italic;font-size:13.5px;color:var(--ink-2);padding:10px 0;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:10px;line-height:1.4;}
+.price-card-features li:first-child{border-top:1px solid var(--rule);}
+.price-card-features li::before{content:"•";color:#c9943a;font-style:normal;font-size:14px;flex-shrink:0;}
 
 /* ── FAQ ── */
 .faq-list{max-width:720px;margin:0 auto;}
@@ -225,7 +227,7 @@ footer{background:var(--ink);color:var(--paper);}
     <!-- Part A: masthead -->
     <div class="hero-mast">
       <span class="hero-logotype reveal">yournal<span class="dot">.</span></span>
-      <p class="hero-tagline reveal d1">El periódico que solo existe para ti — escrito por inteligencia artificial, cada amanecer.</p>
+      <p class="hero-tagline reveal d1">Hecho exclusivamente para ti.</p>
     </div>
 
     <!-- Part B: manifesto columns -->
@@ -430,28 +432,29 @@ footer{background:var(--ink);color:var(--paper);}
 </section>
 
 <!-- 04 PRECIO -->
-<section class="sec" id="precio">
-  <div class="wrap">
-    <div class="sec-eyebrow reveal">04 — Precio</div>
-    <h2 class="sec-title reveal d1"><em>Simple.</em> <span class="plain">Sin contratos.</span></h2>
-    <div class="pricing-inner">
-      <div class="price-dark-card reveal">
-        <div class="price-dark-amount">$3.990</div>
-        <div class="price-dark-period">/ mes</div>
-        <div class="price-dark-rule"></div>
-        <ul class="price-dark-features">
+<section class="sec pricing-section" id="precio">
+  <div class="pricing-inner">
+    <div class="price-dark-col reveal">
+      <div class="price-dark-eyebrow">04 — Precio</div>
+      <div class="price-dark-title">Simple.<span class="accent">Sin contratos.</span></div>
+      <p class="price-dark-text">Al conectarte recibes un yournal gratis a la mañana siguiente. Si te gusta, sigues leyendo. Si no, lo cancelas con un clic. No hay permanencia, no hay letra chica.</p>
+      <a href="/Magacin/digest.html" class="price-dark-cta">Comenzar ahora →</a>
+    </div>
+    <div class="price-card-col reveal d1">
+      <div class="price-card-inner">
+        <div class="price-card-label">Tarifa mensual — Chile</div>
+        <div class="price-card-amount-row">
+          <span class="price-card-amount">$3.990</span>
+          <span class="price-card-period">/ mes</span>
+        </div>
+        <p class="price-card-tagline">Primer yournal gratis al suscribirte.</p>
+        <ul class="price-card-features">
           <li>Un email diseñado, entregado cada mañana</li>
           <li>17 temas, 4 largos, 6 plantillas</li>
           <li>Español o inglés</li>
           <li>Cancela en un clic desde tu portal</li>
           <li>Sin publicidad, sin tracking, sin ruido</li>
         </ul>
-        <a href="/Magacin/digest.html" class="price-dark-cta">Comenzar ahora →</a>
-      </div>
-      <div class="price-light-col reveal d1">
-        <p class="price-promise-title">Sin letra chica.</p>
-        <p class="price-promise">Al conectarte recibes un yournal gratis a la mañana siguiente. Si te gusta, sigues leyendo. Si no, lo cancelas con un clic. No hay permanencia, no hay letra chica.</p>
-        <p class="price-tag-line">CLP · Por mes · Cancela cuando quieras</p>
       </div>
     </div>
   </div>
