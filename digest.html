@@ -108,6 +108,8 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 
 .page-real{
   width:680px;
+  height:800px;
+  overflow:hidden;
   background:var(--paper);
   color:var(--ink);
   box-shadow:0 20px 50px -20px rgba(40,30,15,.4), 0 6px 16px -6px rgba(40,30,15,.2);
@@ -464,6 +466,27 @@ footer p{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1
 
       <div class="form-row reveal">
         <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Tus 3 libros favoritos</label>
+          <p class="form-hint">El tono "Como tus autores" imita el estilo de los escritores que amas.</p>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <input class="form-input" type="text" id="book1" placeholder="Libro 1 — ej. El nombre de la rosa">
+            <input class="form-input" type="text" id="book2" placeholder="Libro 2">
+            <input class="form-input" type="text" id="book3" placeholder="Libro 3">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Tus 3 autores favoritos</label>
+          <p class="form-hint">Escritores cuya voz admiras. Se combinan con los libros para calibrar el estilo.</p>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <input class="form-input" type="text" id="author1" placeholder="Autor 1 — ej. Borges">
+            <input class="form-input" type="text" id="author2" placeholder="Autor 2">
+            <input class="form-input" type="text" id="author3" placeholder="Autor 3">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row reveal">
+        <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Longitud de lectura <em>*</em></label>
           <div class="radios">
             <label class="radio"><input type="radio" name="length" value="1min"><span class="radio-dot"></span><span class="radio-text"><strong>1 min</strong> Una historia, lo esencial</span></label>
@@ -479,18 +502,8 @@ footer p{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1
             <label class="radio"><input type="radio" name="tone" value="curioso"><span class="radio-dot"></span><span class="radio-text"><strong>Curioso</strong> ligero y entretenido</span></label>
             <label class="radio"><input type="radio" name="tone" value="directo"><span class="radio-dot"></span><span class="radio-text"><strong>Directo</strong> sin vueltas, al grano</span></label>
             <label class="radio"><input type="radio" name="tone" value="conversacional"><span class="radio-dot"></span><span class="radio-text"><strong>Conversacional</strong> como un amigo contando</span></label>
-            <label class="radio"><input type="radio" name="tone" value="autores"><span class="radio-dot"></span><span class="radio-text"><strong>Como tus autores</strong> al estilo de los escritores que elegiste</span></label>
+            <label class="radio"><input type="radio" name="tone" value="autores"><span class="radio-dot"></span><span class="radio-text"><strong>Como tus autores</strong> usa los libros y autores que escribiste arriba ↑</span></label>
           </div>
-        </div>
-      </div>
-
-      <div class="form-group reveal">
-        <label class="form-label">Tus 3 libros favoritos</label>
-        <p class="form-hint">Calibramos el tono de escritura según los autores que amas. Úsalo con el tono "Como tus autores".</p>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <input class="form-input" type="text" id="book1" placeholder="Libro 1 — ej. El nombre de la rosa">
-          <input class="form-input" type="text" id="book2" placeholder="Libro 2">
-          <input class="form-input" type="text" id="book3" placeholder="Libro 3">
         </div>
       </div>
 
@@ -858,6 +871,9 @@ function buildPayload(nombre, email, digestNombre) {
     book1: document.getElementById('book1')?.value.trim() || '',
     book2: document.getElementById('book2')?.value.trim() || '',
     book3: document.getElementById('book3')?.value.trim() || '',
+    author1: document.getElementById('author1')?.value.trim() || '',
+    author2: document.getElementById('author2')?.value.trim() || '',
+    author3: document.getElementById('author3')?.value.trim() || '',
   };
   daysData.forEach(d => {
     const sel = form.querySelector(`select[name="${d.col}"]`);

@@ -39,16 +39,19 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 
 /* Avatar dropdown */
 .nav-avatar{position:relative;}
+@keyframes avFadeIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
 .av-dropdown{
-  position:fixed;top:72px;right:40px;
-  width:300px;
+  position:fixed;top:68px;right:32px;
+  width:310px;
   background:var(--paper);
-  border:1px solid var(--rule-2);
-  box-shadow:0 8px 32px -8px rgba(40,30,15,.2);
+  border:1px solid rgba(212,204,184,.5);
+  border-radius:16px;
+  box-shadow:0 8px 40px -8px rgba(40,30,15,.18),0 2px 8px -2px rgba(40,30,15,.08);
   z-index:200;
   display:none;
+  overflow:hidden;
 }
-.av-dropdown.open{display:block;}
+.av-dropdown.open{display:block;animation:avFadeIn .18s cubic-bezier(.2,.9,.2,1);}
 .av-section{padding:20px;}
 .av-photo-ring{width:56px;height:56px;border-radius:50%;background:var(--terracotta);color:var(--paper);display:grid;place-items:center;font-family:'Fraunces',serif;font-style:italic;font-size:22px;overflow:hidden;flex-shrink:0;cursor:pointer;}
 .av-upload-btn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--terracotta);cursor:pointer;border-bottom:1px solid var(--terracotta);}
@@ -202,11 +205,11 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 
 .design-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px;}
 @media(max-width:640px){.design-grid{grid-template-columns:repeat(2,1fr);}}
-.dp-card{border:2px solid var(--rule-2);cursor:pointer;overflow:hidden;transition:border-color .2s;border-radius:2px;}
+.dp-card{border:2px solid var(--rule-2);cursor:pointer;overflow:hidden;transition:border-color .2s;border-radius:2px;display:flex;flex-direction:column;}
 .dp-card:hover:not(.selected){border-color:var(--petrol);}
 .dp-card.selected{border-color:var(--terracotta);}
-.dp-preview{height:80px;overflow:hidden;}
-.dp-label{padding:7px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);border-top:1px solid var(--rule);}
+.dp-preview{height:80px;overflow:hidden;flex-shrink:0;}
+.dp-label{padding:7px 10px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);border-top:1px solid var(--rule);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:28px;display:flex;align-items:center;}
 .dp-card.selected .dp-label{color:var(--terracotta);}
 
 .save-bar{display:flex;justify-content:flex-end;gap:12px;padding-top:20px;border-top:1px solid var(--rule);margin-top:32px;}
@@ -304,7 +307,6 @@ footer p{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1
   <a href="index.html" class="nav-brand wordmark">yournal<span class="dot">.</span></a>
   <div class="nav-right">
     <a href="index.html">Inicio</a>
-    <a href="#" class="sign-out" id="sign-out-link" style="display:none;">Salir</a>
     <div class="nav-avatar" id="nav-avatar">—</div>
 <div class="av-dropdown" id="av-dropdown">
   <div class="av-section">
@@ -337,7 +339,7 @@ footer p{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1
     </div>
   </div>
   <div class="av-divider"></div>
-  <button class="av-signout-btn" onclick="document.getElementById('sign-out-link').click()">Cerrar sesión</button>
+  <button class="av-signout-btn" onclick="signOut()">Cerrar sesión</button>
 </div>
   </div>
 </nav>
@@ -545,6 +547,20 @@ footer p{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1
         <button class="btn btn-ink" id="btn-save-prefs">Guardar cambios</button>
       </div>
 
+      <div id="prefs-auth-wall" style="display:none;background:var(--paper);border:1px solid var(--rule-2);padding:32px 36px;margin-top:16px;">
+        <div style="font-family:'Fraunces',serif;font-size:24px;font-style:italic;color:var(--petrol);margin-bottom:6px;">Para guardar, inicia sesión.</div>
+        <p style="font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:var(--mute);margin-bottom:22px;">Crea una cuenta o accede para activar tu yournal con estas preferencias.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+          <input type="email" id="wall-email" class="form-input" placeholder="tu@correo.com" autocomplete="email">
+          <input type="password" id="wall-password" class="form-input" placeholder="Contraseña (mín. 8 caracteres)" autocomplete="current-password">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-ink" id="wall-login-btn" style="border-radius:100px;padding:11px 22px;">Entrar</button>
+          <button class="btn" id="wall-signup-btn" style="background:var(--mustard);color:var(--ink);border-radius:100px;padding:11px 22px;">Crear cuenta</button>
+          <span id="wall-msg" style="font-family:'Fraunces',serif;font-style:italic;font-size:13px;color:var(--mute);"></span>
+        </div>
+      </div>
+
       <div class="danger-card" id="pause-card">
         <div id="pause-default">
           <div>
@@ -738,7 +754,7 @@ async function saveAvField(field, value) {
 async function sendPasswordReset() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return;
-  await sb.auth.resetPasswordForEmail(session.user.email, {redirectTo: `${location.origin}/cuenta.html`});
+  await sb.auth.resetPasswordForEmail(session.user.email, {redirectTo: 'https://hector-zero.github.io/Magacin/cuenta.html'});
   alert('Te enviamos un link para cambiar tu contraseña.');
 }
 
@@ -746,10 +762,25 @@ async function sendPasswordReset() {
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
+    window.isLoggedIn = true;
     showDashboard(session.user.email);
   } else {
-    document.getElementById('view-login').style.display = 'flex';
-    document.getElementById('view-dashboard').style.display = 'none';
+    window.isLoggedIn = false;
+    document.getElementById('view-login').style.display = 'none';
+    document.getElementById('view-dashboard').style.display = 'block';
+    // Default to preferencias so guest sees the form
+    const prefsTab = document.querySelector('[data-tab=preferencias]');
+    if (prefsTab) prefsTab.click();
+    // Show login prompt in Mi Edición
+    const neTitle = document.getElementById('ne-title');
+    if (neTitle) neTitle.textContent = 'Inicia sesión para ver tu edición.';
+    const neBody = document.getElementById('ne-body');
+    if (neBody) neBody.textContent = 'Accede a tu portal para ver y gestionar tu yournal.';
+    // Hide pause card for guests
+    const pc = document.getElementById('pause-card');
+    if (pc) pc.style.display = 'none';
+    // Show auth wall
+    document.getElementById('prefs-auth-wall').style.display = 'block';
   }
 }
 init();
@@ -778,7 +809,7 @@ document.getElementById('btn-reset').addEventListener('click', async () => {
 
   setMsg(msg, 'Enviando…', '');
   const { error } = await sb.auth.resetPasswordForEmail(email, {
-    redirectTo: `${location.origin}/cuenta.html`
+    redirectTo: 'https://hector-zero.github.io/Magacin/cuenta.html'
   });
   if (error) {
     setMsg(msg, 'No pudimos enviar el email.', 'error');
@@ -788,21 +819,20 @@ document.getElementById('btn-reset').addEventListener('click', async () => {
 });
 
 // ── LOGOUT ──
-document.getElementById('sign-out-link').addEventListener('click', async (e) => {
-  e.preventDefault();
+async function signOut() {
   await sb.auth.signOut();
+  const av = document.getElementById('nav-avatar');
+  if (av) { av.style.display = 'none'; av.textContent = '—'; }
+  document.getElementById('av-dropdown').classList.remove('open');
+  window.isLoggedIn = false;
   document.getElementById('view-dashboard').style.display = 'none';
   document.getElementById('view-login').style.display = 'flex';
-  document.getElementById('sign-out-link').style.display = 'none';
-  const av = document.getElementById('nav-avatar');
-  if (av) av.style.display = 'none';
-});
+}
 
 // ── SHOW DASHBOARD ──
 async function showDashboard(email) {
   document.getElementById('view-login').style.display = 'none';
   document.getElementById('view-dashboard').style.display = 'block';
-  document.getElementById('sign-out-link').style.display = '';
   const av = document.getElementById('nav-avatar');
   if (av) av.style.display = 'grid';
 
@@ -912,10 +942,40 @@ async function showDashboard(email) {
   loadArchive(email);
 }
 
+// ── AUTH WALL ──
+document.getElementById('wall-login-btn').addEventListener('click', async () => {
+  const email = document.getElementById('wall-email').value.trim();
+  const pw    = document.getElementById('wall-password').value;
+  const msg   = document.getElementById('wall-msg');
+  if (!email || !pw) { msg.textContent = 'Completa email y contraseña.'; return; }
+  msg.textContent = 'Entrando…';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) { msg.textContent = 'Email o contraseña incorrectos.'; return; }
+  document.getElementById('prefs-auth-wall').style.display = 'none';
+  document.getElementById('btn-save-prefs').click();
+  showDashboard(email);
+});
+document.getElementById('wall-signup-btn').addEventListener('click', async () => {
+  const email = document.getElementById('wall-email').value.trim();
+  const pw    = document.getElementById('wall-password').value;
+  const msg   = document.getElementById('wall-msg');
+  if (!email || !pw) { msg.textContent = 'Completa email y contraseña.'; return; }
+  if (pw.length < 8) { msg.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
+  msg.textContent = 'Creando cuenta…';
+  const { error } = await sb.auth.signUp({ email, password: pw });
+  if (error) { msg.textContent = 'No se pudo crear la cuenta.'; return; }
+  msg.style.color = 'var(--green)';
+  msg.textContent = 'Cuenta creada. Revisa tu email para confirmarla.';
+});
+
 // ── SAVE PREFS ──
 document.getElementById('btn-save-prefs').addEventListener('click', async function() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) return;
+  if (!session) {
+    document.getElementById('prefs-auth-wall').style.display = 'block';
+    document.getElementById('prefs-auth-wall').scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
 
   const update = {
     digest_name: document.getElementById('pref-digest-name')?.value  || '',
