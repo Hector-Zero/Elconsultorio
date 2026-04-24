@@ -29,6 +29,7 @@ a{color:inherit;text-decoration:none;}
 .wordmark{font-family:'Fraunces',serif;font-weight:400;font-style:italic;letter-spacing:-.03em;line-height:.85;color:var(--petrol);display:inline-block;}
 .wordmark .dot{color:var(--terracotta);}
 
+/* ── NAV ── */
 nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--rule);padding:18px 40px;display:flex;align-items:center;justify-content:space-between;}
 .nav-brand{font-size:28px;}
 .nav-links{display:flex;align-items:center;gap:36px;}
@@ -37,169 +38,156 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 .nav-cta{background:var(--ink);color:var(--paper)!important;padding:10px 20px;border-radius:100px;}
 .nav-cta:hover{background:var(--petrol);}
 
+/* ── TICKER ── */
+.ticker{background:var(--ink);overflow:hidden;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,.06);}
+.ticker-inner{padding:11px 0;}
+.ticker-track{display:inline-flex;animation:ticker 36s linear infinite;}
+.ticker-track:hover{animation-play-state:paused;}
+.ticker-item{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(250,246,238,.55);padding:0 24px;flex-shrink:0;}
+.ticker-sep{color:var(--terracotta);padding:0 4px;}
+@keyframes ticker{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+
+/* ── WRAP ── */
 .wrap{max-width:1340px;margin:0 auto;padding:0 40px;}
 @media(max-width:700px){.wrap{padding:0 22px;} nav{padding:14px 22px;} .nav-links{gap:16px;} .nav-links a:not(.nav-cta){display:none;}}
 
-/* ═══ HERO ═══ */
-.hero{
-  padding:100px 0 88px;
-  border-bottom:3px double var(--rule-2);
-  text-align:center;
-}
-.hero-eyebrow{
-  font-family:'JetBrains Mono',monospace;
-  font-size:11px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--terracotta);
-  margin-bottom:28px;
-  display:inline-flex;align-items:center;gap:10px;
-}
-.hero-eyebrow::before,.hero-eyebrow::after{content:"";width:28px;height:1px;background:var(--terracotta);}
-.hero h1{
-  font-family:'Fraunces',serif;
-  font-size:clamp(52px,8vw,108px);
-  font-weight:400;font-style:italic;
-  line-height:.93;letter-spacing:-.035em;
-  color:var(--petrol);
-  font-variation-settings:"opsz" 144;
-  text-wrap:balance;
-  margin-bottom:28px;
-}
-.hero-sub{
-  font-family:'Fraunces',serif;
-  font-size:20px;font-style:italic;
-  color:var(--mute);
-  max-width:520px;margin:0 auto 44px;
-  line-height:1.5;
-}
-.hero-btn{
-  display:inline-flex;align-items:center;gap:10px;
-  background:var(--ink);color:var(--paper);
-  padding:18px 36px;border-radius:100px;
-  font-family:'Inter',sans-serif;font-size:15px;font-weight:600;
-  letter-spacing:.01em;
-  transition:all .25s cubic-bezier(.2,.9,.2,1);
-}
+/* ── SECTION SKELETON ── */
+.sec{padding:88px 0;border-bottom:1px solid var(--rule);}
+.sec-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--terracotta);margin-bottom:18px;display:flex;align-items:center;gap:14px;}
+.sec-eyebrow::after{content:"";flex:1;height:1px;background:var(--rule);}
+.sec-title{font-family:'Fraunces',serif;font-size:clamp(30px,3.8vw,50px);font-weight:500;line-height:1.06;letter-spacing:-.025em;color:var(--petrol);margin-bottom:52px;}
+.sec-title em{font-style:italic;}.sec-title .plain{font-style:normal;color:var(--ink);}
+
+/* ── HERO ── */
+.hero{padding:88px 0 0;border-bottom:3px double var(--rule-2);}
+.hero-top{text-align:center;padding-bottom:72px;}
+.hero-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--terracotta);margin-bottom:28px;display:inline-flex;align-items:center;gap:10px;}
+.hero-label::before,.hero-label::after{content:"";width:28px;height:1px;background:var(--terracotta);}
+.hero h1{font-family:'Fraunces',serif;font-size:clamp(52px,8vw,108px);font-weight:400;font-style:italic;line-height:.93;letter-spacing:-.035em;color:var(--petrol);font-variation-settings:"opsz" 144;text-wrap:balance;margin-bottom:28px;}
+.hero-sub{font-family:'Fraunces',serif;font-size:20px;font-style:italic;color:var(--mute);max-width:520px;margin:0 auto 44px;line-height:1.5;}
+.hero-btn{display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:var(--paper);padding:18px 36px;border-radius:100px;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;letter-spacing:.01em;transition:all .25s cubic-bezier(.2,.9,.2,1);}
 .hero-btn:hover{background:var(--terracotta);transform:translateY(-2px);}
 
-/* ═══ SECTION ═══ */
-.sec{padding:88px 0;border-bottom:1px solid var(--rule);}
-.sec-eyebrow{
-  font-family:'JetBrains Mono',monospace;
-  font-size:11px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--terracotta);margin-bottom:14px;
-}
-.sec-title{
-  font-family:'Fraunces',serif;
-  font-size:clamp(32px,4vw,54px);
-  font-weight:500;font-style:italic;
-  color:var(--petrol);letter-spacing:-.025em;
-  line-height:1.05;margin-bottom:56px;
-}
+/* ── MANIFESTO ── */
+.manifesto{border-top:1px solid var(--rule);padding:72px 0 80px;}
+.manifesto-inner{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;}
+@media(max-width:940px){.manifesto-inner{grid-template-columns:1fr;gap:52px;}}
+.manifesto-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--terracotta);margin-bottom:24px;}
+.manifesto-quote{font-family:'Fraunces',serif;font-size:clamp(22px,2.5vw,32px);font-style:italic;font-weight:400;line-height:1.3;color:var(--petrol);letter-spacing:-.015em;margin-bottom:32px;padding-left:22px;border-left:3px solid var(--terracotta);}
+.manifesto-body{font-family:'Fraunces',serif;font-style:italic;font-size:16.5px;line-height:1.72;color:var(--ink-2);}
+.manifesto-body::first-letter{font-family:'Fraunces',serif;font-size:68px;font-weight:600;font-style:normal;float:left;line-height:.82;padding:6px 12px 0 0;color:var(--terracotta);font-variation-settings:"opsz" 144;}
+.manifesto-ctas{display:flex;align-items:center;gap:24px;margin-top:36px;flex-wrap:wrap;}
+.btn-filled{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:var(--paper);padding:14px 28px;border-radius:100px;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;letter-spacing:.01em;transition:all .25s;}
+.btn-filled:hover{background:var(--terracotta);transform:translateY(-2px);}
+.btn-link{font-family:'Fraunces',serif;font-style:italic;font-size:16px;color:var(--petrol);border-bottom:1px solid var(--rule-2);padding-bottom:2px;transition:border-color .2s,color .2s;}
+.btn-link:hover{color:var(--terracotta);border-color:var(--terracotta);}
 
-/* ═══ STEPS ═══ */
-.steps-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:2px;
-}
-@media(max-width:860px){.steps-grid{grid-template-columns:1fr;gap:0;}}
-.step-card{
-  background:var(--paper);
-  padding:44px 36px;
-  border:1px solid var(--rule-2);
-  position:relative;
-}
-.step-card + .step-card{border-left:none;}
-@media(max-width:860px){.step-card + .step-card{border-left:1px solid var(--rule-2);border-top:none;}}
-.step-num{
-  font-family:'JetBrains Mono',monospace;
-  font-size:11px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--terracotta);margin-bottom:20px;
-}
-.step-card h3{
-  font-family:'Fraunces',serif;
-  font-size:26px;font-weight:500;font-style:italic;
-  color:var(--petrol);letter-spacing:-.015em;
-  line-height:1.1;margin-bottom:14px;
-}
-.step-card p{
-  font-family:'Fraunces',serif;
-  font-style:italic;font-size:15px;
-  color:var(--mute);line-height:1.6;
-}
+/* ── NEWSPAPER CARD ── */
+.newspaper-card{background:#fff;border:1px solid #e0d9cc;box-shadow:0 24px 60px -18px rgba(40,30,15,.3),0 6px 18px -4px rgba(40,30,15,.14);font-family:'Inter',sans-serif;max-width:420px;}
+.nc-header{background:var(--cream);border-bottom:1px solid #e0d9cc;padding:16px 22px;display:flex;justify-content:space-between;align-items:flex-start;}
+.nc-addr{display:flex;flex-direction:column;gap:4px;}
+.nc-addr-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);}
+.nc-addr-name{font-family:'Fraunces',serif;font-size:18px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.01em;}
+.nc-stamp{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--terracotta);border:1.5px solid var(--terracotta);padding:5px 10px;transform:rotate(3deg);display:inline-block;font-weight:500;margin-top:4px;}
+.nc-body{padding:22px 22px 26px;}
+.nc-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);margin-bottom:12px;}
+.nc-headline{font-family:'Fraunces',serif;font-size:22px;font-weight:600;line-height:1.12;color:var(--ink);letter-spacing:-.015em;margin-bottom:14px;font-variation-settings:"opsz" 72;}
+.nc-excerpt{font-family:'Fraunces',serif;font-style:italic;font-size:14px;line-height:1.62;color:var(--mute);border-top:1px solid #ece6da;padding-top:14px;}
+.nc-footer{background:var(--ink);padding:10px 22px;display:flex;justify-content:space-between;align-items:center;}
+.nc-footer-l{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:rgba(250,246,238,.45);}
+.nc-footer-r{font-family:'Fraunces',serif;font-style:italic;font-size:13px;color:var(--mustard);}
 
-/* ═══ PRICING ═══ */
-.price-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:20px;
-  align-items:start;
-}
-@media(max-width:860px){.price-grid{grid-template-columns:1fr;}}
-.price-card{
-  background:var(--paper);
-  border:1px solid var(--rule-2);
-  padding:40px 36px;
-  position:relative;
-}
-.price-card.featured{
-  background:var(--petrol);
-  border-color:var(--petrol);
-  color:var(--paper);
-  transform:translateY(-8px);
-}
-.price-badge{
-  font-family:'JetBrains Mono',monospace;
-  font-size:9px;letter-spacing:.22em;text-transform:uppercase;
-  color:var(--mustard);
-  margin-bottom:20px;
-  display:block;
-}
-.price-name{
-  font-family:'Fraunces',serif;
-  font-size:30px;font-weight:500;font-style:italic;
-  color:var(--petrol);letter-spacing:-.02em;
-  margin-bottom:8px;
-}
-.price-card.featured .price-name{color:var(--paper);}
-.price-deliveries{
-  font-family:'JetBrains Mono',monospace;
-  font-size:11px;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--mute);margin-bottom:28px;
-}
-.price-card.featured .price-deliveries{color:rgba(250,246,238,.65);}
-.price-amount{
-  font-family:'Fraunces',serif;
-  font-size:48px;font-weight:600;
-  color:var(--ink);letter-spacing:-.03em;
-  line-height:1;margin-bottom:6px;
-}
-.price-card.featured .price-amount{color:var(--mustard);}
-.price-currency{
-  font-family:'JetBrains Mono',monospace;
-  font-size:10px;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--mute-2);margin-bottom:32px;
-}
-.price-card.featured .price-currency{color:rgba(250,246,238,.5);}
-.price-btn{
-  display:block;width:100%;
-  background:var(--ink);color:var(--paper);
-  padding:14px 20px;border-radius:100px;
-  font-family:'Inter',sans-serif;font-size:14px;font-weight:600;
-  letter-spacing:.01em;text-align:center;
-  transition:all .25s;
-}
-.price-btn:hover{background:var(--terracotta);}
-.price-card.featured .price-btn{background:var(--mustard);color:var(--ink);}
-.price-card.featured .price-btn:hover{background:var(--terracotta);color:var(--paper);}
+/* ── STEPS ── */
+.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;}
+@media(max-width:860px){.steps-grid{grid-template-columns:1fr;}}
+.step-card{background:var(--paper);padding:44px 36px;border:1px solid var(--rule-2);position:relative;}
+.step-card+.step-card{border-left:none;}
+@media(max-width:860px){.step-card+.step-card{border-left:1px solid var(--rule-2);border-top:none;}}
+.step-num{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--terracotta);margin-bottom:20px;}
+.step-card h3{font-family:'Fraunces',serif;font-size:26px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.015em;line-height:1.1;margin-bottom:14px;}
+.step-card p{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--mute);line-height:1.6;}
 
-/* ═══ FOOTER ═══ */
-footer{background:var(--ink);color:var(--paper);padding:32px 40px;text-align:center;margin-top:0;}
-footer .wordmark{color:var(--paper);font-size:32px;}
-footer p{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(250,246,238,.5);margin-top:14px;}
-footer a{color:var(--mustard);border-bottom:1px solid var(--mustard);}
+/* ── PRODUCT ── */
+.product-inner{display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:start;}
+@media(max-width:900px){.product-inner{grid-template-columns:1fr;gap:48px;}}
+.feature-item{display:grid;grid-template-columns:28px 1fr;gap:20px;align-items:start;padding:20px 0;border-bottom:1px solid var(--rule);}
+.feature-item:first-child{border-top:1px solid var(--rule);}
+.feature-num{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--terracotta);padding-top:5px;}
+.feature-title{font-family:'Fraunces',serif;font-size:20px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.01em;margin-bottom:4px;line-height:1.1;}
+.feature-desc{font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:var(--mute);line-height:1.5;}
 
-/* ═══ REVEAL ═══ */
+/* ── SPECIMEN CARD ── */
+.specimen{background:var(--paper);border:1px solid var(--rule-2);box-shadow:0 18px 48px -14px rgba(40,30,15,.22);}
+.specimen-mast{background:var(--petrol);color:var(--paper);padding:18px 24px;display:flex;justify-content:space-between;align-items:baseline;}
+.specimen-brand{font-family:'Fraunces',serif;font-size:26px;font-weight:600;font-style:italic;letter-spacing:-.02em;}
+.specimen-date{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(250,246,238,.5);}
+.specimen-body{padding:24px;}
+.specimen-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--terracotta);margin-bottom:10px;}
+.specimen-head{font-family:'Fraunces',serif;font-size:24px;font-weight:600;line-height:1.1;color:var(--ink);letter-spacing:-.015em;margin-bottom:16px;font-variation-settings:"opsz" 72;}
+.specimen-rule{height:1px;background:var(--rule-2);margin-bottom:16px;}
+.specimen-cols{columns:2;column-gap:20px;font-family:'Fraunces',serif;font-style:italic;font-size:13px;line-height:1.65;color:var(--mute);}
+.specimen-cols p{break-inside:avoid;margin-bottom:10px;}
+
+/* ── PERSONAS ── */
+.personas-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
+@media(max-width:900px){.personas-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:520px){.personas-grid{grid-template-columns:1fr;}}
+.persona-card{background:var(--paper);border:1px solid var(--rule-2);padding:36px 28px;}
+.persona-card+.persona-card{border-left:none;}
+@media(max-width:900px){
+  .persona-card:nth-child(3){border-left:1px solid var(--rule-2);border-top:none;}
+  .persona-card:nth-child(4){border-top:none;}
+}
+@media(max-width:520px){.persona-card+.persona-card{border-left:1px solid var(--rule-2);border-top:none;}}
+.persona-icon{font-family:'Fraunces',serif;font-size:34px;font-style:italic;color:var(--terracotta);margin-bottom:14px;line-height:1;}
+.persona-title{font-family:'Fraunces',serif;font-size:21px;font-weight:500;font-style:italic;color:var(--petrol);margin-bottom:10px;letter-spacing:-.01em;line-height:1.1;}
+.persona-desc{font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:var(--mute);line-height:1.6;}
+
+/* ── PRICING ── */
+.pricing-inner{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}
+@media(max-width:900px){.pricing-inner{grid-template-columns:1fr;gap:48px;}}
+.price-card-single{background:var(--paper);border:1px solid var(--rule-2);padding:48px 40px;max-width:520px;}
+.price-amount-big{font-family:'Fraunces',serif;font-size:72px;font-weight:600;line-height:1;color:var(--ink);letter-spacing:-.04em;}
+.price-period{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);margin-top:8px;margin-bottom:36px;}
+.price-features{list-style:none;margin-bottom:32px;}
+.price-features li{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--ink-2);padding:13px 0;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:12px;line-height:1.4;}
+.price-features li:first-child{border-top:1px solid var(--rule);}
+.price-features li::before{content:"—";color:var(--terracotta);font-style:normal;font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0;}
+.price-cta{display:block;text-align:center;background:var(--ink);color:var(--paper);padding:16px 28px;border-radius:100px;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;letter-spacing:.01em;transition:all .25s;}
+.price-cta:hover{background:var(--terracotta);}
+.price-promise-title{font-family:'Fraunces',serif;font-size:28px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.02em;margin-bottom:16px;line-height:1.1;}
+.price-promise{font-family:'Fraunces',serif;font-style:italic;font-size:16px;color:var(--mute);line-height:1.75;}
+
+/* ── FAQ ── */
+.faq-list{max-width:720px;margin:0 auto;}
+.faq-item{border-bottom:1px solid var(--rule);}
+.faq-item:first-child{border-top:1px solid var(--rule);}
+.faq-q{width:100%;background:none;border:none;cursor:pointer;text-align:left;padding:22px 0;display:flex;justify-content:space-between;align-items:center;gap:20px;}
+.faq-q-text{font-family:'Fraunces',serif;font-size:19px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.01em;line-height:1.2;}
+.faq-icon{font-family:'Fraunces',serif;font-size:26px;font-style:italic;color:var(--terracotta);flex-shrink:0;transition:transform .3s;line-height:1;font-weight:300;}
+.faq-item.open .faq-icon{transform:rotate(45deg);}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(.2,.9,.2,1);}
+.faq-item.open .faq-a{max-height:320px;}
+.faq-a-inner{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--mute);line-height:1.72;padding-bottom:24px;}
+
+/* ── FOOTER ── */
+footer{background:var(--ink);color:var(--paper);}
+.footer-main{padding:72px 0 52px;}
+.footer-grid{display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr;gap:48px;}
+@media(max-width:900px){.footer-grid{grid-template-columns:1fr 1fr;gap:40px;}}
+@media(max-width:560px){.footer-grid{grid-template-columns:1fr;gap:36px;}}
+.footer-brand .wordmark{color:var(--paper);font-size:36px;margin-bottom:18px;display:block;}
+.footer-tagline{font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:rgba(250,246,238,.5);line-height:1.65;max-width:260px;}
+.footer-col-title{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:rgba(250,246,238,.35);margin-bottom:18px;}
+.footer-col ul{list-style:none;}
+.footer-col ul li{margin-bottom:11px;}
+.footer-col ul li a{font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:rgba(250,246,238,.6);transition:color .2s;}
+.footer-col ul li a:hover{color:var(--mustard);}
+.footer-bar{border-top:1px solid rgba(250,246,238,.1);padding:20px 40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+@media(max-width:700px){.footer-bar{padding:20px 22px;}}
+.footer-bar-l,.footer-bar-r{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:rgba(250,246,238,.28);}
+
+/* ── REVEAL ── */
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.9,.2,1);}
 .reveal.in{opacity:1;transform:translateY(0);}
 .reveal.d1{transition-delay:.08s;}.reveal.d2{transition-delay:.16s;}.reveal.d3{transition-delay:.24s;}
@@ -216,81 +204,316 @@ footer a{color:var(--mustard);border-bottom:1px solid var(--mustard);}
   </div>
 </nav>
 
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <div class="ticker-track">
+      <span class="ticker-item">Escrito cada mañana</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Tus temas, tu tono, tu largo</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Seis diseños editoriales</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Llega antes del café</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Cero ruido, cero publicidad</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">IA que te conoce</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Escrito cada mañana</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Tus temas, tu tono, tu largo</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Seis diseños editoriales</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Llega antes del café</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">Cero ruido, cero publicidad</span>
+      <span class="ticker-item ticker-sep">·</span>
+      <span class="ticker-item">IA que te conoce</span>
+      <span class="ticker-item ticker-sep">·</span>
+    </div>
+  </div>
+</div>
+
 <!-- HERO -->
 <section class="hero">
   <div class="wrap">
-    <div class="hero-eyebrow reveal">Tu periódico personal · IA</div>
-    <h1 class="reveal d1">El periódico que solo<br>existe para ti.</h1>
-    <p class="hero-sub reveal d2">Cada mañana una edición escrita por IA con los temas que tú eliges, en el diseño que tú prefieres.</p>
-    <a href="/Magacin/digest.html" class="hero-btn reveal d3">Diseñar el mío →</a>
+    <div class="hero-top">
+      <div class="hero-label reveal">Tu periódico personal · IA</div>
+      <h1 class="reveal d1">El periódico que solo<br>existe para ti.</h1>
+      <p class="hero-sub reveal d2">Cada mañana una edición escrita por IA con los temas que tú eliges, en el diseño que tú prefieres.</p>
+      <a href="/Magacin/digest.html" class="hero-btn reveal d3">Diseñar el mío →</a>
+    </div>
+
+    <!-- MANIFESTO -->
+    <div class="manifesto">
+      <div class="manifesto-inner">
+        <div class="reveal">
+          <div class="manifesto-eyebrow">El manifiesto</div>
+          <blockquote class="manifesto-quote">"Imagina un periódico donde nada sobra y nada importante se pierde. Escrito cada mañana. Solo para ti."</blockquote>
+          <p class="manifesto-body">Existe demasiado ruido. Demasiados feeds, alertas, newsletters que nadie pidió. yournal nace de una idea distinta: que la información que merece tu atención puede llegar ordenada, escrita con cuidado y pensada exactamente para ti — sin algoritmos que buscan tu tiempo, sino para ti que buscas aprender.</p>
+          <div class="manifesto-ctas">
+            <a href="/Magacin/digest.html" class="btn-filled">Diseñar mi yournal →</a>
+            <a href="#como" class="btn-link">Ver cómo funciona</a>
+          </div>
+        </div>
+        <div class="reveal d1">
+          <div class="newspaper-card">
+            <div class="nc-header">
+              <div class="nc-addr">
+                <span class="nc-addr-label">Para</span>
+                <span class="nc-addr-name">Héctor Zero</span>
+              </div>
+              <span class="nc-stamp">Correo</span>
+            </div>
+            <div class="nc-body">
+              <div class="nc-tag">Ciencia · Portada del día</div>
+              <div class="nc-headline">El telescopio que acaba de ver el nacimiento de las galaxias</div>
+              <p class="nc-excerpt">Las primeras imágenes del James Webb muestran estructuras que ningún modelo predijo. Los astrónomos llevan semanas reescribiendo lo que creían saber sobre los primeros 500 millones de años del universo.</p>
+            </div>
+            <div class="nc-footer">
+              <span class="nc-footer-l">Yournal · Edición del martes</span>
+              <span class="nc-footer-r">06:30 am</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- CÓMO FUNCIONA -->
+<!-- 01 CÓMO FUNCIONA -->
 <section class="sec" id="como">
   <div class="wrap">
-    <div class="sec-eyebrow reveal">El proceso</div>
-    <h2 class="sec-title reveal d1">Tres pasos. Un yournal.</h2>
+    <div class="sec-eyebrow reveal">01 — El proceso</div>
+    <h2 class="sec-title reveal d1"><em>Tres minutos.</em> <span class="plain">Un periódico hecho solo para ti.</span></h2>
     <div class="steps-grid">
       <div class="step-card reveal">
-        <div class="step-num">01 · Elige tus temas</div>
-        <h3>Tú decides cada día.</h3>
-        <p>Un tema distinto para cada mañana de la semana. Ciencia, historia, filosofía, cocina — lo que te mueva.</p>
+        <div class="step-num">01 · Lo diseñas tú</div>
+        <h3>Tú eliges todo.</h3>
+        <p>Temas, largo de lectura, tono y el diseño visual de tu edición. Diecisiete temas, cuatro largos, cuatro tonos, seis plantillas.</p>
       </div>
       <div class="step-card reveal d1">
-        <div class="step-num">02 · La IA escribe para ti</div>
-        <h3>Tu edición, generada cada noche.</h3>
-        <p>Cada noche la IA redacta tu edición personalizada con el tono y la extensión que configuraste.</p>
+        <div class="step-num">02 · Las mejores fuentes</div>
+        <h3>La IA lee por ti.</h3>
+        <p>Cada mañana se leen las fuentes más importantes del tema del día. Se adaptan a tu configuración y se redactan para ti.</p>
       </div>
       <div class="step-card reveal d2">
-        <div class="step-num">03 · Llega antes del café</div>
-        <h3>En tu bandeja a tu hora.</h3>
-        <p>A las 6:30, a las 7:00, cuando quieras. Tu yournal te espera antes de que empiece el día.</p>
+        <div class="step-num">03 · Llega a tu correo</div>
+        <h3>Antes de que empiece el día.</h3>
+        <p>Sin apps, sin feeds, sin notificaciones. Tu yournal llega a tu correo en el diseño que elegiste. Solo eso.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- PRECIO -->
+<!-- 02 EL PRODUCTO -->
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-eyebrow reveal">02 — El producto</div>
+    <h2 class="sec-title reveal d1"><em>Un diario.</em> <span class="plain">Escrito en serio.</span></h2>
+    <div class="product-inner">
+      <div class="reveal">
+        <div class="feature-item">
+          <div class="feature-num">01</div>
+          <div>
+            <div class="feature-title">17 temas a elegir</div>
+            <div class="feature-desc">Ciencia, historia, filosofía, economía, tecnología, cocina, arte, viajes y más — uno distinto para cada día de la semana.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-num">02</div>
+          <div>
+            <div class="feature-title">1, 5, 15 ó 30 minutos</div>
+            <div class="feature-desc">Elige cuánto quieres leer cada mañana. La extensión se ajusta exactamente a tu tiempo disponible.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-num">03</div>
+          <div>
+            <div class="feature-title">Cuatro tonos distintos</div>
+            <div class="feature-desc">Divulgativo, académico, periodístico o conversacional. El mismo tema, una voz completamente distinta.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-num">04</div>
+          <div>
+            <div class="feature-title">Seis diseños editoriales</div>
+            <div class="feature-desc">Desde editorial oscuro hasta nórdico minimalista. Un diseño que parece un periódico de verdad.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-num">05</div>
+          <div>
+            <div class="feature-title">Español e inglés</div>
+            <div class="feature-desc">Tu edición en el idioma que prefieras, sin importar el origen de las fuentes consultadas.</div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d1">
+        <div class="specimen">
+          <div class="specimen-mast">
+            <span class="specimen-brand">El Curioso</span>
+            <span class="specimen-date">Martes · 22 abril 2026 · N°047</span>
+          </div>
+          <div class="specimen-body">
+            <div class="specimen-tag">Ciencia · Portada</div>
+            <div class="specimen-head">Cómo el telescopio Webb está reescribiendo la historia del universo</div>
+            <div class="specimen-rule"></div>
+            <div class="specimen-cols">
+              <p>Las galaxias más antiguas que hemos observado no se parecen a lo que los modelos predijeron. Son más masivas, más brillantes y se formaron mucho más rápido de lo esperado.</p>
+              <p>Esto obliga a los astrónomos a revisar los modelos de formación estelar que llevan décadas construyendo. El universo tuvo un comienzo más violento y fértil de lo que imaginamos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 PARA QUIÉN -->
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-eyebrow reveal">03 — Para quién</div>
+    <h2 class="sec-title reveal d1"><em>Para gente que todavía</em> <span class="plain">quiere pensar por la mañana.</span></h2>
+    <div class="personas-grid">
+      <div class="persona-card reveal">
+        <div class="persona-icon">El curioso</div>
+        <div class="persona-title">Lee un poco de todo.</div>
+        <p class="persona-desc">No le basta con un tema. Prefiere aprender algo nuevo cada día, y no le importa que sea ciencia un martes y filosofía un miércoles.</p>
+      </div>
+      <div class="persona-card reveal d1">
+        <div class="persona-icon">El ocupado</div>
+        <div class="persona-title">Sin tiempo para feeds.</div>
+        <p class="persona-desc">Quiere estar informado pero no tiene tiempo para navegar. Necesita lo esencial, bien escrito, en cinco minutos.</p>
+      </div>
+      <div class="persona-card reveal d2">
+        <div class="persona-icon">El lector</div>
+        <div class="persona-title">Extraña el periódico impreso.</div>
+        <p class="persona-desc">Recuerda cuando leer el diario era un ritual. Quiere recuperar esa sensación, sin ruido, sin publicidad, con placer.</p>
+      </div>
+      <div class="persona-card reveal d3">
+        <div class="persona-icon">El harto</div>
+        <div class="persona-title">Un email. Nada más.</div>
+        <p class="persona-desc">Está harto del ruido. Quiere un solo email bueno al día y que después no le llegue nada más. Sin seguimiento, sin marketing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 PRECIO -->
 <section class="sec" id="precio">
   <div class="wrap">
-    <div class="sec-eyebrow reveal">Planes</div>
-    <h2 class="sec-title reveal d1">Elige tu paquete.</h2>
-    <div class="price-grid">
-
-      <div class="price-card reveal">
-        <span class="price-name">Starter</span>
-        <div class="price-deliveries">10 entregas</div>
-        <div class="price-amount">$3.000</div>
-        <div class="price-currency">CLP · pago único</div>
-        <a href="/Magacin/digest.html" class="price-btn">Empezar →</a>
+    <div class="sec-eyebrow reveal">04 — Precio</div>
+    <h2 class="sec-title reveal d1"><em>Simple.</em> <span class="plain">Sin contratos.</span></h2>
+    <div class="pricing-inner">
+      <div class="price-card-single reveal">
+        <div class="price-amount-big">$3.990</div>
+        <div class="price-period">CLP · por mes · cancela cuando quieras</div>
+        <ul class="price-features">
+          <li>Un email diseñado, entregado cada mañana</li>
+          <li>17 temas, 4 largos, 6 plantillas</li>
+          <li>Español o inglés</li>
+          <li>Cancela en un clic desde tu portal</li>
+          <li>Sin publicidad, sin tracking, sin ruido</li>
+        </ul>
+        <a href="/Magacin/digest.html" class="price-cta">Comenzar ahora →</a>
       </div>
-
-      <div class="price-card featured reveal d1">
-        <span class="price-badge">El más popular</span>
-        <span class="price-name">Regular</span>
-        <div class="price-deliveries">30 entregas</div>
-        <div class="price-amount">$8.000</div>
-        <div class="price-currency">CLP · pago único</div>
-        <a href="/Magacin/digest.html" class="price-btn">El más popular →</a>
+      <div class="reveal d1">
+        <p class="price-promise-title">Sin letra chica.</p>
+        <p class="price-promise">Al conectarte recibes un yournal gratis a la mañana siguiente. Si te gusta, sigues leyendo. Si no, lo cancelas con un clic. No hay permanencia, no hay letra chica.</p>
       </div>
-
-      <div class="price-card reveal d2">
-        <span class="price-name">Trimestral</span>
-        <div class="price-deliveries">90 entregas</div>
-        <div class="price-amount">$20.000</div>
-        <div class="price-currency">CLP · pago único</div>
-        <a href="/Magacin/digest.html" class="price-btn">Tres meses →</a>
-      </div>
-
     </div>
   </div>
 </section>
 
+<!-- 05 FAQ -->
+<section class="sec" id="faq">
+  <div class="wrap">
+    <div class="sec-eyebrow reveal">05 — Dudas</div>
+    <h2 class="sec-title reveal d1" style="max-width:640px;"><em>Lo que suelen preguntarnos.</em></h2>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">
+          <span class="faq-q-text">¿Por qué no un RSS o una app de noticias?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a"><p class="faq-a-inner">Porque un RSS te da links, no lectura. Y una app de noticias quiere tu tiempo, no tu atención. yournal escribe para ti — no te muestra titulares, te da un texto completo, ordenado y adaptado a tu nivel de interés. Es la diferencia entre un menú y una comida.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">
+          <span class="faq-q-text">¿La IA inventa cosas?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a"><p class="faq-a-inner">No. Cada edición parte de fuentes verificadas y actuales. La IA sintetiza, adapta el tono y la extensión, pero no fabrica hechos. Si algo no está bien documentado, no entra en tu edición.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">
+          <span class="faq-q-text">¿Puedo cambiar la configuración después?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a"><p class="faq-a-inner">Sí. Desde tu portal puedes cambiar temas, largo, tono, diseño e idioma cuando quieras. Los cambios entran en efecto en la próxima edición.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">
+          <span class="faq-q-text">¿Cómo se cancela?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a"><p class="faq-a-inner">Con un clic desde tu portal. No hay correos que enviar, no hay llamadas que hacer. Lo cancelas y listo. Sin preguntas, sin intentos de retenerte.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">
+          <span class="faq-q-text">¿Puedo probar uno antes de pagar?</span>
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a"><p class="faq-a-inner">Sí. Al registrarte recibes tu primera edición gratis a la mañana siguiente. Si no te convence, no pagas nada. Si te gusta, activas la suscripción desde tu portal.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
 <footer>
-  <div class="wordmark">yournal<span class="dot">.</span></div>
-  <p>Hecho con cuidado · Santiago</p>
-  <p style="margin-top:8px;"><a href="mailto:zero@zeroia.cl">zero@zeroia.cl</a></p>
+  <div class="footer-main">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <span class="wordmark">yournal<span class="dot">.</span></span>
+          <p class="footer-tagline">Un periódico personal, escrito cada mañana por inteligencia artificial. Hecho en Santiago de Chile, enviado a donde estés.</p>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Producto</div>
+          <ul>
+            <li><a href="/Magacin/digest.html">Diseñar mi yournal</a></li>
+            <li><a href="#como">Cómo funciona</a></li>
+            <li><a href="#precio">Precio</a></li>
+            <li><a href="/Magacin/cuenta.html">Mi portal</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Compañía</div>
+          <ul>
+            <li><a href="#">Manifiesto</a></li>
+            <li><a href="#">Prensa</a></li>
+            <li><a href="mailto:zero@zeroia.cl">Contacto</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <div class="footer-col-title">Legal</div>
+          <ul>
+            <li><a href="#">Privacidad</a></li>
+            <li><a href="#">Términos</a></li>
+            <li><a href="#">Cookies</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bar">
+    <span class="footer-bar-l">© 2026 Yournal — Hecho con cuidado · Santiago</span>
+    <span class="footer-bar-r">No usamos tu email para nada más</span>
+  </div>
 </footer>
 
 <script>
@@ -298,6 +521,15 @@ const io = new IntersectionObserver((es) => {
   es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
 }, { threshold:.1, rootMargin:'0px 0px -40px 0px' });
 document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+document.querySelectorAll('.faq-q').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  });
+});
 </script>
 </body>
 </html>
