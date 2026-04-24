@@ -59,28 +59,36 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 .sec-title em{font-style:italic;}.sec-title .plain{font-style:normal;color:var(--ink);}
 
 /* ── HERO ── */
-.hero{padding:88px 0 0;border-bottom:3px double var(--rule-2);}
-.hero-top{text-align:center;padding-bottom:72px;}
-.hero-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--terracotta);margin-bottom:28px;display:inline-flex;align-items:center;gap:10px;}
-.hero-label::before,.hero-label::after{content:"";width:28px;height:1px;background:var(--terracotta);}
-.hero h1{font-family:'Fraunces',serif;font-size:clamp(52px,8vw,108px);font-weight:400;font-style:italic;line-height:.93;letter-spacing:-.035em;color:var(--petrol);font-variation-settings:"opsz" 144;text-wrap:balance;margin-bottom:28px;}
-.hero-sub{font-family:'Fraunces',serif;font-size:20px;font-style:italic;color:var(--mute);max-width:520px;margin:0 auto 44px;line-height:1.5;}
-.hero-btn{display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:var(--paper);padding:18px 36px;border-radius:100px;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;letter-spacing:.01em;transition:all .25s cubic-bezier(.2,.9,.2,1);}
-.hero-btn:hover{background:var(--terracotta);transform:translateY(-2px);}
+.hero{border-bottom:3px double var(--rule-2);}
+.hero-mast{padding:32px 0 26px;border-bottom:1px solid var(--rule-2);}
+.hero-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;}
+.hero-meta-item{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);}
+@media(max-width:640px){.hero-meta-item:not(.hero-meta-center){display:none;}}
+.hero-logotype{font-family:'Fraunces',serif;font-size:clamp(80px,11vw,140px);font-weight:400;font-style:italic;letter-spacing:-.04em;line-height:.88;color:var(--petrol);font-variation-settings:"opsz" 144;display:block;text-align:center;margin:0 0 16px;}
+.hero-logotype .dot{color:var(--terracotta);}
+.hero-tagline{font-family:'Fraunces',serif;font-size:clamp(14px,1.5vw,18px);font-style:italic;color:var(--mute);text-align:center;max-width:580px;margin:0 auto;}
 
-/* ── MANIFESTO ── */
-.manifesto{border-top:1px solid var(--rule);padding:72px 0 80px;}
-.manifesto-inner{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;}
-@media(max-width:940px){.manifesto-inner{grid-template-columns:1fr;gap:52px;}}
-.manifesto-eyebrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--terracotta);margin-bottom:24px;}
-.manifesto-quote{font-family:'Fraunces',serif;font-size:clamp(22px,2.5vw,32px);font-style:italic;font-weight:400;line-height:1.3;color:var(--petrol);letter-spacing:-.015em;margin-bottom:32px;padding-left:22px;border-left:3px solid var(--terracotta);}
-.manifesto-body{font-family:'Fraunces',serif;font-style:italic;font-size:16.5px;line-height:1.72;color:var(--ink-2);}
-.manifesto-body::first-letter{font-family:'Fraunces',serif;font-size:68px;font-weight:600;font-style:normal;float:left;line-height:.82;padding:6px 12px 0 0;color:var(--terracotta);font-variation-settings:"opsz" 144;}
-.manifesto-ctas{display:flex;align-items:center;gap:24px;margin-top:36px;flex-wrap:wrap;}
+/* ── HERO BODY ── */
+.hero-body{padding:56px 0 72px;}
+.hero-cols{display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:start;}
+@media(max-width:940px){.hero-cols{grid-template-columns:1fr;gap:52px;}}
+.hero-manifesto-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--terracotta);margin-bottom:22px;text-align:center;}
+.hero-quote{font-family:'Fraunces',serif;font-size:clamp(24px,2.8vw,44px);font-style:italic;font-weight:400;line-height:1.18;color:var(--petrol);letter-spacing:-.02em;margin-bottom:28px;}
+.hero-para{font-family:'Fraunces',serif;font-style:italic;font-size:16px;line-height:1.72;color:var(--ink-2);}
+.hero-para::first-letter{font-family:'Fraunces',serif;font-size:64px;font-weight:600;font-style:normal;float:left;line-height:.82;padding:5px 12px 0 0;color:var(--terracotta);font-variation-settings:"opsz" 144;}
+.hero-ctas{display:flex;align-items:center;gap:24px;margin-top:32px;flex-wrap:wrap;}
 .btn-filled{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:var(--paper);padding:14px 28px;border-radius:100px;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;letter-spacing:.01em;transition:all .25s;}
 .btn-filled:hover{background:var(--terracotta);transform:translateY(-2px);}
 .btn-link{font-family:'Fraunces',serif;font-style:italic;font-size:16px;color:var(--petrol);border-bottom:1px solid var(--rule-2);padding-bottom:2px;transition:border-color .2s,color .2s;}
 .btn-link:hover{color:var(--terracotta);border-color:var(--terracotta);}
+
+/* ── CARD COLUMN ── */
+.nc-badge-wrap{text-align:right;margin-bottom:10px;}
+.nc-badge{display:inline-block;background:var(--mustard);color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;padding:6px 14px;border-radius:100px;font-weight:500;}
+.nc-written-badge{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--terracotta);border:1px solid var(--terracotta);padding:4px 10px;margin-top:10px;}
+.nc-badge-bottom{text-align:right;}
+.nc-body-cols{columns:2;column-gap:14px;font-family:'Fraunces',serif;font-style:italic;font-size:12.5px;line-height:1.58;color:var(--mute);}
+.nc-body-cols p{break-inside:avoid;margin-bottom:8px;}
 
 /* ── NEWSPAPER CARD ── */
 .newspaper-card{background:#fff;border:1px solid #e0d9cc;box-shadow:0 24px 60px -18px rgba(40,30,15,.3),0 6px 18px -4px rgba(40,30,15,.14);font-family:'Inter',sans-serif;max-width:420px;}
@@ -100,12 +108,14 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 /* ── STEPS ── */
 .steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;}
 @media(max-width:860px){.steps-grid{grid-template-columns:1fr;}}
-.step-card{background:var(--paper);padding:44px 36px;border:1px solid var(--rule-2);position:relative;}
+.step-card{background:var(--paper);padding:44px 36px;border:.5px solid var(--rule-2);position:relative;}
 .step-card+.step-card{border-left:none;}
-@media(max-width:860px){.step-card+.step-card{border-left:1px solid var(--rule-2);border-top:none;}}
-.step-num{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--terracotta);margin-bottom:20px;}
-.step-card h3{font-family:'Fraunces',serif;font-size:26px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.015em;line-height:1.1;margin-bottom:14px;}
-.step-card p{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--mute);line-height:1.6;}
+@media(max-width:860px){.step-card+.step-card{border-left:.5px solid var(--rule-2);border-top:none;}}
+.step-big-num{font-family:'Fraunces',serif;font-size:clamp(72px,7vw,96px);font-weight:400;font-style:italic;color:#c9943a;line-height:.88;margin-bottom:14px;letter-spacing:-.03em;display:block;font-variation-settings:"opsz" 144;}
+.step-num{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute-2);margin-bottom:10px;}
+.step-card h3{font-family:'Fraunces',serif;font-size:24px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.015em;line-height:1.1;margin-bottom:12px;}
+.step-card p{font-family:'Fraunces',serif;font-style:italic;font-size:13.5px;color:var(--mute);line-height:1.6;}
+.steps-title{font-size:clamp(38px,4.5vw,58px)!important;margin-bottom:52px!important;}
 
 /* ── PRODUCT ── */
 .product-inner{display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:start;}
@@ -239,26 +249,34 @@ footer{background:var(--ink);color:var(--paper);}
 <!-- HERO -->
 <section class="hero">
   <div class="wrap">
-    <div class="hero-top">
-      <div class="hero-label reveal">Tu periódico personal · IA</div>
-      <h1 class="reveal d1">El periódico que solo<br>existe para ti.</h1>
-      <p class="hero-sub reveal d2">Cada mañana una edición escrita por IA con los temas que tú eliges, en el diseño que tú prefieres.</p>
-      <a href="/Magacin/digest.html" class="hero-btn reveal d3">Diseñar el mío →</a>
+
+    <!-- Part A: masthead -->
+    <div class="hero-mast">
+      <div class="hero-meta">
+        <span class="hero-meta-item">Nº 001 · Edición fundacional</span>
+        <span class="hero-meta-item hero-meta-center">Santiago de Chile</span>
+        <span class="hero-meta-item">Jueves, 23 de abril · Desde $3.990/mes</span>
+      </div>
+      <span class="hero-logotype reveal">yournal<span class="dot">.</span></span>
+      <p class="hero-tagline reveal d1">El periódico que solo existe para ti — escrito por inteligencia artificial, cada amanecer.</p>
     </div>
 
-    <!-- MANIFESTO -->
-    <div class="manifesto">
-      <div class="manifesto-inner">
+    <!-- Part B: manifesto columns -->
+    <div class="hero-body">
+      <div class="hero-cols">
         <div class="reveal">
-          <div class="manifesto-eyebrow">El manifiesto</div>
-          <blockquote class="manifesto-quote">"Imagina un periódico donde nada sobra y nada importante se pierde. Escrito cada mañana. Solo para ti."</blockquote>
-          <p class="manifesto-body">Existe demasiado ruido. Demasiados feeds, alertas, newsletters que nadie pidió. yournal nace de una idea distinta: que la información que merece tu atención puede llegar ordenada, escrita con cuidado y pensada exactamente para ti — sin algoritmos que buscan tu tiempo, sino para ti que buscas aprender.</p>
-          <div class="manifesto-ctas">
+          <div class="hero-manifesto-label">— El manifiesto —</div>
+          <blockquote class="hero-quote">"Imagina un periódico donde nada sobra y nada importante se pierde. Escrito cada mañana. Solo para ti."</blockquote>
+          <p class="hero-para">Eliges los temas que te importan, la longitud que tienes tiempo de leer, el tono que prefieres y hasta el diseño visual. Una inteligencia artificial lee, selecciona y escribe — como un editor personal que te conoce. Y lo recibes en tu correo antes del café.</p>
+          <div class="hero-ctas">
             <a href="/Magacin/digest.html" class="btn-filled">Diseñar mi yournal →</a>
             <a href="#como" class="btn-link">Ver cómo funciona</a>
           </div>
         </div>
         <div class="reveal d1">
+          <div class="nc-badge-wrap">
+            <span class="nc-badge">Entrega 06:30</span>
+          </div>
           <div class="newspaper-card">
             <div class="nc-header">
               <div class="nc-addr">
@@ -270,16 +288,23 @@ footer{background:var(--ink);color:var(--paper);}
             <div class="nc-body">
               <div class="nc-tag">Ciencia · Portada del día</div>
               <div class="nc-headline">El telescopio que acaba de ver el nacimiento de las galaxias</div>
-              <p class="nc-excerpt">Las primeras imágenes del James Webb muestran estructuras que ningún modelo predijo. Los astrónomos llevan semanas reescribiendo lo que creían saber sobre los primeros 500 millones de años del universo.</p>
+              <div class="nc-body-cols">
+                <p>Las primeras imágenes del James Webb muestran estructuras que ningún modelo predijo. Los astrónomos llevan semanas reescribiendo lo que creían saber.</p>
+                <p>El universo tuvo un comienzo más violento y fértil de lo que imaginamos. Galaxias masivas, nacidas en los primeros 500 millones de años.</p>
+              </div>
             </div>
             <div class="nc-footer">
-              <span class="nc-footer-l">Yournal · Edición del martes</span>
-              <span class="nc-footer-r">06:30 am</span>
+              <span class="nc-footer-l">Nº 847</span>
+              <span class="nc-footer-r" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(250,246,238,.45);">6 min · lectura</span>
             </div>
+          </div>
+          <div class="nc-badge-bottom">
+            <span class="nc-written-badge">Escrito para ti</span>
           </div>
         </div>
       </div>
     </div>
+
   </div>
 </section>
 
@@ -287,20 +312,23 @@ footer{background:var(--ink);color:var(--paper);}
 <section class="sec" id="como">
   <div class="wrap">
     <div class="sec-eyebrow reveal">01 — El proceso</div>
-    <h2 class="sec-title reveal d1"><em>Tres minutos.</em> <span class="plain">Un periódico hecho solo para ti.</span></h2>
+    <h2 class="sec-title steps-title reveal d1"><em>Tres minutos.</em> <span class="plain">Un periódico<br>hecho solo para ti.</span></h2>
     <div class="steps-grid">
       <div class="step-card reveal">
-        <div class="step-num">01 · Lo diseñas tú</div>
+        <span class="step-big-num">01</span>
+        <div class="step-num">Lo diseñas tú</div>
         <h3>Tú eliges todo.</h3>
         <p>Temas, largo de lectura, tono y el diseño visual de tu edición. Diecisiete temas, cuatro largos, cuatro tonos, seis plantillas.</p>
       </div>
       <div class="step-card reveal d1">
-        <div class="step-num">02 · Las mejores fuentes</div>
-        <h3>La IA lee por ti.</h3>
+        <span class="step-big-num">02</span>
+        <div class="step-num">Las mejores fuentes</div>
+        <h3>Las mejores fuentes.</h3>
         <p>Cada mañana se leen las fuentes más importantes del tema del día. Se adaptan a tu configuración y se redactan para ti.</p>
       </div>
       <div class="step-card reveal d2">
-        <div class="step-num">03 · Llega a tu correo</div>
+        <span class="step-big-num">03</span>
+        <div class="step-num">Llega a tu correo</div>
         <h3>Antes de que empiece el día.</h3>
         <p>Sin apps, sin feeds, sin notificaciones. Tu yournal llega a tu correo en el diseño que elegiste. Solo eso.</p>
       </div>
