@@ -60,7 +60,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 
 /* ── HERO ── */
 .hero{border-bottom:3px double var(--rule-2);}
-.hero-mast{padding:32px 0 26px;border-bottom:1px solid var(--rule-2);}
+.hero-mast{padding:40px 0 26px;}
 .hero-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;}
 .hero-meta-item{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);}
 @media(max-width:640px){.hero-meta-item:not(.hero-meta-center){display:none;}}
@@ -142,7 +142,7 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 .personas-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
 @media(max-width:900px){.personas-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:520px){.personas-grid{grid-template-columns:1fr;}}
-.persona-card{background:var(--paper);border:1px solid var(--rule-2);padding:36px 28px;}
+.persona-card{background:var(--cream);border:1px solid var(--rule-2);padding:36px 28px;}
 .persona-card+.persona-card{border-left:none;}
 @media(max-width:900px){
   .persona-card:nth-child(3){border-left:1px solid var(--rule-2);border-top:none;}
@@ -154,19 +154,23 @@ nav{position:sticky;top:0;z-index:100;background:rgba(240,235,224,.94);backdrop-
 .persona-desc{font-family:'Fraunces',serif;font-style:italic;font-size:14px;color:var(--mute);line-height:1.6;}
 
 /* ── PRICING ── */
-.pricing-inner{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}
-@media(max-width:900px){.pricing-inner{grid-template-columns:1fr;gap:48px;}}
-.price-card-single{background:var(--paper);border:1px solid var(--rule-2);padding:48px 40px;max-width:520px;}
-.price-amount-big{font-family:'Fraunces',serif;font-size:72px;font-weight:600;line-height:1;color:var(--ink);letter-spacing:-.04em;}
-.price-period{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);margin-top:8px;margin-bottom:36px;}
-.price-features{list-style:none;margin-bottom:32px;}
-.price-features li{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--ink-2);padding:13px 0;border-bottom:1px solid var(--rule);display:flex;align-items:baseline;gap:12px;line-height:1.4;}
-.price-features li:first-child{border-top:1px solid var(--rule);}
-.price-features li::before{content:"—";color:var(--terracotta);font-style:normal;font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0;}
-.price-cta{display:block;text-align:center;background:var(--ink);color:var(--paper);padding:16px 28px;border-radius:100px;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;letter-spacing:.01em;transition:all .25s;}
-.price-cta:hover{background:var(--terracotta);}
+.pricing-inner{display:grid;grid-template-columns:55fr 45fr;gap:0;align-items:center;}
+@media(max-width:900px){.pricing-inner{grid-template-columns:1fr;}}
+.price-dark-card{background:#1b2a4a;padding:52px 44px;}
+.price-dark-amount{font-family:'Fraunces',serif;font-size:clamp(64px,6vw,88px);font-weight:600;line-height:1;color:#c9943a;letter-spacing:-.04em;}
+.price-dark-period{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:rgba(250,246,238,.38);margin-top:8px;}
+.price-dark-rule{height:1px;background:rgba(250,246,238,.12);margin:28px 0;}
+.price-dark-features{list-style:none;margin-bottom:36px;}
+.price-dark-features li{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:rgba(250,246,238,.82);padding:13px 0;border-bottom:1px solid rgba(250,246,238,.1);display:flex;align-items:baseline;gap:12px;line-height:1.4;}
+.price-dark-features li:first-child{border-top:1px solid rgba(250,246,238,.1);}
+.price-dark-features li::before{content:"—";color:#c9943a;font-style:normal;font-family:'JetBrains Mono',monospace;font-size:11px;flex-shrink:0;}
+.price-dark-cta{display:block;width:100%;text-align:center;background:#c9943a;color:#1b2a4a;padding:16px 28px;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;letter-spacing:.02em;transition:background .25s;border:none;cursor:pointer;}
+.price-dark-cta:hover{background:#e0a94a;}
+.price-light-col{padding:0 52px;}
+@media(max-width:900px){.price-light-col{padding:0;margin-top:40px;}}
 .price-promise-title{font-family:'Fraunces',serif;font-size:28px;font-weight:500;font-style:italic;color:var(--petrol);letter-spacing:-.02em;margin-bottom:16px;line-height:1.1;}
 .price-promise{font-family:'Fraunces',serif;font-style:italic;font-size:16px;color:var(--mute);line-height:1.75;}
+.price-tag-line{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute-2);margin-top:22px;}
 
 /* ── FAQ ── */
 .faq-list{max-width:720px;margin:0 auto;}
@@ -220,11 +224,6 @@ footer{background:var(--ink);color:var(--paper);}
 
     <!-- Part A: masthead -->
     <div class="hero-mast">
-      <div class="hero-meta">
-        <span class="hero-meta-item">Nº 001 · Edición fundacional</span>
-        <span class="hero-meta-item hero-meta-center">Santiago de Chile</span>
-        <span class="hero-meta-item">Jueves, 23 de abril · Desde $3.990/mes</span>
-      </div>
       <span class="hero-logotype reveal">yournal<span class="dot">.</span></span>
       <p class="hero-tagline reveal d1">El periódico que solo existe para ti — escrito por inteligencia artificial, cada amanecer.</p>
     </div>
@@ -436,21 +435,23 @@ footer{background:var(--ink);color:var(--paper);}
     <div class="sec-eyebrow reveal">04 — Precio</div>
     <h2 class="sec-title reveal d1"><em>Simple.</em> <span class="plain">Sin contratos.</span></h2>
     <div class="pricing-inner">
-      <div class="price-card-single reveal">
-        <div class="price-amount-big">$3.990</div>
-        <div class="price-period">CLP · por mes · cancela cuando quieras</div>
-        <ul class="price-features">
+      <div class="price-dark-card reveal">
+        <div class="price-dark-amount">$3.990</div>
+        <div class="price-dark-period">/ mes</div>
+        <div class="price-dark-rule"></div>
+        <ul class="price-dark-features">
           <li>Un email diseñado, entregado cada mañana</li>
           <li>17 temas, 4 largos, 6 plantillas</li>
           <li>Español o inglés</li>
           <li>Cancela en un clic desde tu portal</li>
           <li>Sin publicidad, sin tracking, sin ruido</li>
         </ul>
-        <a href="/Magacin/digest.html" class="price-cta">Comenzar ahora →</a>
+        <a href="/Magacin/digest.html" class="price-dark-cta">Comenzar ahora →</a>
       </div>
-      <div class="reveal d1">
+      <div class="price-light-col reveal d1">
         <p class="price-promise-title">Sin letra chica.</p>
         <p class="price-promise">Al conectarte recibes un yournal gratis a la mañana siguiente. Si te gusta, sigues leyendo. Si no, lo cancelas con un clic. No hay permanencia, no hay letra chica.</p>
+        <p class="price-tag-line">CLP · Por mes · Cancela cuando quieras</p>
       </div>
     </div>
   </div>
@@ -459,8 +460,8 @@ footer{background:var(--ink);color:var(--paper);}
 <!-- 05 FAQ -->
 <section class="sec" id="faq">
   <div class="wrap">
-    <div class="sec-eyebrow reveal">05 — Dudas</div>
-    <h2 class="sec-title reveal d1" style="max-width:640px;"><em>Lo que suelen preguntarnos.</em></h2>
+    <div class="sec-eyebrow reveal" style="justify-content:center;max-width:760px;margin-left:auto;margin-right:auto;">05 — Dudas</div>
+    <h2 class="sec-title reveal d1" style="text-align:center;max-width:760px;margin-left:auto;margin-right:auto;"><em>Lo que suelen preguntarnos.</em></h2>
     <div class="faq-list">
       <div class="faq-item">
         <button class="faq-q">
