@@ -6,9 +6,23 @@ import { mergeClientConfig, fetchClientConfig } from '../lib/clientConfig.js'
 import { THEMES, DEFAULT_THEME_ID, getTheme } from '../config/themes.js'
 
 export default function SettingsScreen({ onNavigate }) {
-  const { professional, config, clientId } = useContext(ClientCtx)
+  const { professional, config, clientId, setConfig } = useContext(ClientCtx)
   const isPro = !!professional
-  const empresaMode = !!config?.modo_empresa
+  // Independent on-mount fetch so sidebar (Perfil hidden in empresa mode) and
+  // section-order decisions reflect DB truth, not a stale ClientCtx snapshot.
+  const [freshConfig, setFreshConfig] = useState(config)
+  useEffect(() => {
+    if (!clientId) return
+    let alive = true
+    fetchClientConfig(clientId).then(({ config: fresh }) => {
+      if (!alive || !fresh) return
+      console.log('[SettingsScreen] fresh config from Supabase:', { modo_empresa: fresh.modo_empresa, has_empresa: !!fresh.empresa, empresa_nombre: fresh.empresa?.nombre })
+      setFreshConfig(fresh)
+      setConfig?.(fresh)
+    })
+    return () => { alive = false }
+  }, [clientId])
+  const empresaMode = !!freshConfig?.modo_empresa
   const [agendaNeedsSetup, setAgendaNeedsSetup] = useState(false)
 
   // In empresa mode, flag the Agenda tab when any pro still has the
@@ -805,7 +819,14 @@ function EmpresaSettings({ onActivated, onGoToAgendaSection }) {
   useEffect(() => {
     if (!clientId) return
     let alive = true
-    fetchClientConfig(clientId).then(({ config: fresh }) => {
+    fetchClientConfig(clientId).then(({ config: fresh, error }) => {
+      console.log('[EmpresaSettings] fresh fetch:', {
+        error,
+        modo_empresa: fresh?.modo_empresa,
+        empresa_nombre: fresh?.empresa?.nombre,
+        empresa_keys: fresh?.empresa ? Object.keys(fresh.empresa) : null,
+        full_fresh: fresh,
+      })
       if (!alive) return
       setFreshConfig(fresh)
       if (fresh) setConfig(fresh) // keep context in sync
@@ -818,7 +839,9 @@ function EmpresaSettings({ onActivated, onGoToAgendaSection }) {
     <div style={{ padding: 40, color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif }}>cargando…</div>
   )
 
+  // Decision uses ONLY the freshly fetched Supabase value, never ClientCtx.
   const empresaMode = !!freshConfig?.modo_empresa
+  console.log('[EmpresaSettings] render decision:', { empresaMode, willShowActiveForm: empresaMode })
   if (empresaMode) {
     return <EmpresaActiveForm banner={banner} onGoToAgendaSection={onGoToAgendaSection} />
   }
@@ -1226,26 +1249,30 @@ function AppearanceSettings() {
   const [themeId, setThemeId] = useState(config?.theme_id ?? DEFAULT_THEME_ID)
   const [saving, setSaving]   = useState(false)
   const [toast, setToast]     = useState(null)
+  // Ref guards the async on-mount fetch from overriding a theme the user
+  // clicked while the fetch was in flight (the "snaps back" bug).
+  const hasInteractedRef = React.useRef(false)
 
-  // Fetch fresh on mount — make sure the highlighted theme reflects DB truth,
-  // not the (possibly stale) context.
+  // Fetch fresh on mount — but only seed the theme ONCE, before any user
+  // interaction. After the user clicks a card, nothing here may overwrite it.
   useEffect(() => {
     if (!clientId) return
     let alive = true
     fetchClientConfig(clientId).then(({ config: fresh }) => {
       if (!alive) return
+      if (fresh) setConfig(fresh) // keep context in sync regardless
+      if (hasInteractedRef.current) return // user already picked — leave their choice alone
       const id = fresh?.theme_id ?? DEFAULT_THEME_ID
       setThemeId(id)
       applyTheme(getTheme(id))
-      if (fresh) setConfig(fresh)
     })
     return () => { alive = false }
   }, [clientId])
 
   function pickTheme(id) {
+    hasInteractedRef.current = true
     setThemeId(id)
-    const theme = getTheme(id)
-    applyTheme(theme)
+    applyTheme(getTheme(id))
   }
 
   async function save() {
