@@ -1009,15 +1009,10 @@ function EmpresaActiveForm({ banner, onGoToAgendaSection }) {
         </button>
       </div>
 
-      <div style={{ marginTop: 14, fontSize: 13, color: T.inkMuted, textAlign: 'right' }}>
-        ¿Ya configuraste las agendas de tus profesionales?{' '}
-        <a
-          onClick={(e) => { e.preventDefault(); onGoToAgendaSection?.() }}
-          href="#agenda"
-          style={{ color: T.primary, textDecoration: 'none', cursor: 'pointer', fontWeight: 500 }}
-        >
-          Ve a Ajustes → Agenda →
-        </a>
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <button style={btn('ghost')} onClick={() => onGoToAgendaSection?.()}>
+          Ve a Agenda para configurar a los profesionales →
+        </button>
       </div>
     </div>
   )
@@ -1272,19 +1267,6 @@ function AppearanceSettings() {
     applyTheme(getTheme(id))
   }
 
-  async function resetTheme() {
-    // Optimistic UI: clear highlight + apply default immediately.
-    setThemeId(null)
-    applyTheme(getTheme(DEFAULT_THEME_ID))
-    setSaving(true)
-    const { error, config: next } = await mergeClientConfig(clientId, { theme_id: null })
-    setSaving(false)
-    if (error) { setToast({ kind: 'err', msg: 'Error al restaurar' }); return }
-    setConfig(next)
-    setToast({ kind: 'ok', msg: '✓ Tema restaurado' })
-    setTimeout(() => setToast(null), 2500)
-  }
-
   async function save() {
     setSaving(true)
     console.log('[Apariencia save] BEFORE mergeClientConfig', { clientId, themeId })
@@ -1341,21 +1323,6 @@ function AppearanceSettings() {
             </div>
           )
         })}
-      </div>
-
-      <div style={{ marginTop: 12, textAlign: 'right' }}>
-        <a
-          onClick={(e) => { e.preventDefault(); if (!saving) resetTheme() }}
-          href="#reset-theme"
-          style={{
-            fontSize: 12, color: T.inkMuted, textDecoration: 'none',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            borderBottom: `1px dashed ${T.lineSoft}`,
-            opacity: saving ? 0.5 : 1,
-          }}
-        >
-          Restaurar tema por defecto
-        </a>
       </div>
 
       <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
