@@ -1249,37 +1249,42 @@ function AppearanceSettings() {
   const [themeId, setThemeId] = useState(config?.theme_id ?? DEFAULT_THEME_ID)
   const [saving, setSaving]   = useState(false)
   const [toast, setToast]     = useState(null)
-  // Ref guards the async on-mount fetch from overriding a theme the user
-  // clicked while the fetch was in flight (the "snaps back" bug).
-  const hasInteractedRef = React.useRef(false)
 
-  // Fetch fresh on mount — but only seed the theme ONCE, before any user
-  // interaction. After the user clicks a card, nothing here may overwrite it.
+  // On-mount fetch: ONLY apply a theme if one is explicitly saved in Supabase.
+  // If theme_id is missing/null/undefined, do nothing — leave whatever theme
+  // is currently rendered (including a click the user just made). This avoids
+  // the "snap back to default" race entirely with no need for an interaction ref.
   useEffect(() => {
     if (!clientId) return
     let alive = true
-    fetchClientConfig(clientId).then(({ config: fresh }) => {
+    fetchClientConfig(clientId).then(({ config: fresh, error }) => {
+      console.log('[Apariencia mount] fetch result:', { error, theme_id: fresh?.theme_id, config_keys: fresh ? Object.keys(fresh) : null })
       if (!alive) return
-      if (fresh) setConfig(fresh) // keep context in sync regardless
-      if (hasInteractedRef.current) return // user already picked — leave their choice alone
-      const id = fresh?.theme_id ?? DEFAULT_THEME_ID
-      setThemeId(id)
-      applyTheme(getTheme(id))
+      if (fresh) setConfig(fresh) // keep context in sync (other tabs care about other fields)
+      if (fresh?.theme_id) {
+        setThemeId(fresh.theme_id)
+        applyTheme(getTheme(fresh.theme_id))
+      }
+      // else: no saved theme — do not call applyTheme, do not call setThemeId.
     })
     return () => { alive = false }
   }, [clientId])
 
   function pickTheme(id) {
-    hasInteractedRef.current = true
     setThemeId(id)
     applyTheme(getTheme(id))
   }
 
   async function save() {
     setSaving(true)
+    console.log('[Apariencia save] BEFORE mergeClientConfig', { clientId, themeId })
     const { error, config: next } = await mergeClientConfig(clientId, { theme_id: themeId })
+    console.log('[Apariencia save] AFTER mergeClientConfig', { error, theme_id_in_next: next?.theme_id })
+    if (error) { setSaving(false); setToast({ kind: 'err', msg: 'Error al guardar' }); return }
+    // Verify the write actually landed in Supabase by re-reading.
+    const { config: verify, error: vErr } = await fetchClientConfig(clientId)
+    console.log('[Apariencia save] VERIFY re-fetch from Supabase', { error: vErr, theme_id: verify?.theme_id, persisted: verify?.theme_id === themeId })
     setSaving(false)
-    if (error) { setToast({ kind: 'err', msg: 'Error al guardar' }); return }
     setConfig(next)
     setToast({ kind: 'ok', msg: '✓ Apariencia guardada' })
     setTimeout(() => setToast(null), 2500)
