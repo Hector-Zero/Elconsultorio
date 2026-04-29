@@ -5,3 +5,9 @@ node_modules/
 dist/
 .vite/
 *.log
+# Supabase CLI temp files (machine-specific cache)
+supabase/.temp/
+supabase/.branches/
+
+# Deno function caches
+**/.deno/

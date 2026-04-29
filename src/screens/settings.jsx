@@ -320,21 +320,25 @@ function BotPreview({ systemPrompt, agentName }) {
     setInput('')
     setSending(true)
     try {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 500,
-          system: systemPrompt || undefined,
-          messages: next,
-        }),
-      })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+      
+      const r = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 500,
+            system: systemPrompt || undefined,
+            messages: next,
+          }),
+        }
+      )
       if (!r.ok) throw new Error(`API ${r.status}`)
       const j = await r.json()
       const reply = j.content?.[0]?.text?.trim() ?? ''

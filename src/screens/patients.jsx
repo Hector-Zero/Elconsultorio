@@ -336,20 +336,25 @@ const sessionsHash = (notes) => {
 async function generateSummary(notes) {
   const text = notes.map(s => s.notes).filter(Boolean).join('\n\n')
   const prompt = `Eres un asistente clínico. Resume en un párrafo breve y coherente el progreso terapéutico del paciente basándote en estas notas de sesión. No menciones números de sesión ni fechas. Escribe en tercera persona, tono clínico y conciso. Máximo 100 palabras: ${text}`
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  })
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const r = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    }
+  )
   if (!r.ok) throw new Error(`API ${r.status}`)
   const j = await r.json()
   return j.content?.[0]?.text?.trim() ?? ''
