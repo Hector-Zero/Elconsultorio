@@ -1001,10 +1001,6 @@ function EmpresaActiveForm({ banner, onGoToAgendaSection }) {
         <input value={direccion} onChange={e => setDireccion(e.target.value)} style={textInput} />
       </FieldRow>
 
-      <div style={{ marginTop: 18, padding: 12, background: T.bgSunk, borderRadius: 8, fontSize: 12, color: T.inkMuted, lineHeight: 1.5 }}>
-        Para gestionar profesionales ve a <strong>Ajustes → Agenda</strong>.
-      </div>
-
       <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
         {toast?.kind === 'ok'  && <span style={{ fontSize: 12, color: T.confirmado }}>{toast.msg}</span>}
         {toast?.kind === 'err' && <span style={{ fontSize: 12, color: T.danger }}>{toast.msg}</span>}
@@ -1013,17 +1009,15 @@ function EmpresaActiveForm({ banner, onGoToAgendaSection }) {
         </button>
       </div>
 
-      <div style={{
-        marginTop: 28, padding: '14px 16px',
-        background: T.bgRaised, border: `1px solid ${T.line}`,
-        borderRadius: 10, display: 'flex', alignItems: 'center', gap: 14,
-      }}>
-        <div style={{ flex: 1, fontSize: 13, color: T.inkSoft, lineHeight: 1.5 }}>
-          ¿Ya configuraste las agendas de tus profesionales?
-        </div>
-        <button style={btn('ghost')} onClick={() => onGoToAgendaSection?.()}>
-          Ir a Agenda →
-        </button>
+      <div style={{ marginTop: 14, fontSize: 13, color: T.inkMuted, textAlign: 'right' }}>
+        ¿Ya configuraste las agendas de tus profesionales?{' '}
+        <a
+          onClick={(e) => { e.preventDefault(); onGoToAgendaSection?.() }}
+          href="#agenda"
+          style={{ color: T.primary, textDecoration: 'none', cursor: 'pointer', fontWeight: 500 }}
+        >
+          Ve a Ajustes → Agenda →
+        </a>
       </div>
     </div>
   )
@@ -1246,26 +1240,29 @@ function EmpresaWizard({ onCancel, onActivated }) {
 function AppearanceSettings() {
   const { clientId, config, setConfig } = useContext(ClientCtx)
 
-  const [themeId, setThemeId] = useState(config?.theme_id ?? DEFAULT_THEME_ID)
+  // null = no card highlighted (no saved theme). A string = saved theme id.
+  const [themeId, setThemeId] = useState(config?.theme_id ?? null)
   const [saving, setSaving]   = useState(false)
   const [toast, setToast]     = useState(null)
 
-  // On-mount fetch: ONLY apply a theme if one is explicitly saved in Supabase.
-  // If theme_id is missing/null/undefined, do nothing — leave whatever theme
-  // is currently rendered (including a click the user just made). This avoids
-  // the "snap back to default" race entirely with no need for an interaction ref.
+  // On-mount fetch:
+  //   - If a theme is saved → highlight + apply it.
+  //   - Else → apply the default light theme silently and leave themeId=null
+  //     (no card highlighted) so the UI reflects "no saved preference".
   useEffect(() => {
     if (!clientId) return
     let alive = true
     fetchClientConfig(clientId).then(({ config: fresh, error }) => {
-      console.log('[Apariencia mount] fetch result:', { error, theme_id: fresh?.theme_id, config_keys: fresh ? Object.keys(fresh) : null })
+      console.log('[Apariencia mount] fetch result:', { error, theme_id: fresh?.theme_id })
       if (!alive) return
-      if (fresh) setConfig(fresh) // keep context in sync (other tabs care about other fields)
+      if (fresh) setConfig(fresh)
       if (fresh?.theme_id) {
         setThemeId(fresh.theme_id)
         applyTheme(getTheme(fresh.theme_id))
+      } else {
+        setThemeId(null)
+        applyTheme(getTheme(DEFAULT_THEME_ID))
       }
-      // else: no saved theme — do not call applyTheme, do not call setThemeId.
     })
     return () => { alive = false }
   }, [clientId])
@@ -1275,13 +1272,25 @@ function AppearanceSettings() {
     applyTheme(getTheme(id))
   }
 
+  async function resetTheme() {
+    // Optimistic UI: clear highlight + apply default immediately.
+    setThemeId(null)
+    applyTheme(getTheme(DEFAULT_THEME_ID))
+    setSaving(true)
+    const { error, config: next } = await mergeClientConfig(clientId, { theme_id: null })
+    setSaving(false)
+    if (error) { setToast({ kind: 'err', msg: 'Error al restaurar' }); return }
+    setConfig(next)
+    setToast({ kind: 'ok', msg: '✓ Tema restaurado' })
+    setTimeout(() => setToast(null), 2500)
+  }
+
   async function save() {
     setSaving(true)
     console.log('[Apariencia save] BEFORE mergeClientConfig', { clientId, themeId })
     const { error, config: next } = await mergeClientConfig(clientId, { theme_id: themeId })
     console.log('[Apariencia save] AFTER mergeClientConfig', { error, theme_id_in_next: next?.theme_id })
     if (error) { setSaving(false); setToast({ kind: 'err', msg: 'Error al guardar' }); return }
-    // Verify the write actually landed in Supabase by re-reading.
     const { config: verify, error: vErr } = await fetchClientConfig(clientId)
     console.log('[Apariencia save] VERIFY re-fetch from Supabase', { error: vErr, theme_id: verify?.theme_id, persisted: verify?.theme_id === themeId })
     setSaving(false)
@@ -1332,6 +1341,21 @@ function AppearanceSettings() {
             </div>
           )
         })}
+      </div>
+
+      <div style={{ marginTop: 12, textAlign: 'right' }}>
+        <a
+          onClick={(e) => { e.preventDefault(); if (!saving) resetTheme() }}
+          href="#reset-theme"
+          style={{
+            fontSize: 12, color: T.inkMuted, textDecoration: 'none',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            borderBottom: `1px dashed ${T.lineSoft}`,
+            opacity: saving ? 0.5 : 1,
+          }}
+        >
+          Restaurar tema por defecto
+        </a>
       </div>
 
       <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
