@@ -23,7 +23,7 @@ const todayISO = () => {
 export default function PatientsScreen({ onNavigate }) {
   const { clientId, professional } = useContext(ClientCtx)
   const isPro = !!professional
-  const [selectedId, setSelectedId] = useState(null)   // patient.id
+  const [selectedId, setSelectedId] = useState(null)
   const [query, setQuery]           = useState('')
   const [leads, setLeads]           = useState([])
   const [patients, setPatients]     = useState([])
@@ -31,7 +31,7 @@ export default function PatientsScreen({ onNavigate }) {
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(null)
 
-  // Initial load + auto-create missing patient rows
+  // Initial load + auto-create missing patient rows + assignments
   useEffect(() => {
     if (!clientId) return
     let alive = true
@@ -62,34 +62,61 @@ export default function PatientsScreen({ onNavigate }) {
       const ls   = lr.data ?? []
       let   pts  = pr.data ?? []
       const ap   = ar.data ?? []
-      // In professional mode, restrict patients to those with at least one appt assigned to this pro
+
+      // In professional mode, restrict patients to those with at least one appt
+      // assigned to this pro (RLS will also enforce this, but the filter avoids
+      // showing rows that would be empty after RLS)
       if (isPro) {
         const proLeadIds = new Set(ap.map(a => a.lead_id))
         pts = pts.filter(p => proLeadIds.has(p.lead_id))
       }
+
       const have = new Set(pts.map(p => p.lead_id))
       const apptByLead = ap.reduce((m,a) => ((m[a.lead_id] ??= []).push(a), m), {})
 
-      // Auto-create patient rows for qualified leads with ≥1 appointment but no patient row
+      // Auto-create patient rows for qualified leads with ≥1 appointment but no patient row.
+      // Also assign the patient's first treating professional from their first appointment.
       const toCreate = ls
         .filter(l => !have.has(l.id) && (apptByLead[l.id]?.length ?? 0) >= 1)
-        .map(l => ({
-          client_id:      clientId,
-          lead_id:        l.id,
-          full_name:      l.name ?? 'Sin nombre',
-          phone:          l.phone ?? '',
-          since:          todayISO(),
-          status:         'active',
-          clinical_notes: [],
-          total_sessions: 0,
-          balance:        0,
-        }))
+        .map(l => {
+          const firstAppt = apptByLead[l.id][0]
+          return {
+            client_id:       clientId,
+            lead_id:         l.id,
+            professional_id: firstAppt?.professional_id ?? null,
+            full_name:       l.name ?? 'Sin nombre',
+            phone:           l.phone ?? '',
+            since:           todayISO(),
+            status:          'active',
+            total_sessions:  0,
+            balance:         0,
+          }
+        })
 
       if (toCreate.length) {
         const { data: created, error: insErr } = await supabase
           .from('patients').insert(toCreate).select('*')
-        if (insErr) setError(insErr.message)
-        if (created) pts = pts.concat(created)
+        if (insErr) {
+          setError(insErr.message)
+        } else if (created) {
+          // For each new patient, create an active assignment
+          const assignmentsToCreate = created
+            .filter(p => p.professional_id)
+            .map(p => ({
+              patient_id:      p.id,
+              professional_id: p.professional_id,
+              client_id:       p.client_id,
+              status:          'active',
+              admin_can_view_notes: true,
+            }))
+          if (assignmentsToCreate.length) {
+            const { error: aErr } = await supabase
+              .from('patient_assignments')
+              .insert(assignmentsToCreate)
+            if (aErr) setError(aErr.message)
+          }
+          pts = pts.concat(created)
+        }
       }
 
       setLeads(ls)
@@ -130,7 +157,6 @@ export default function PatientsScreen({ onNavigate }) {
     const { error: e } = await supabase.from('patients').update(patch).eq('id', patient.id)
     if (e) { setError(e.message); return }
     setPatients(prev => prev.map(p => p.id === patient.id ? { ...p, ...patch } : p))
-    // Keep leads in sync for shared fields
     if (patient._lead && (patch.full_name !== undefined || patch.phone !== undefined)) {
       const leadPatch = {}
       if (patch.full_name !== undefined) leadPatch.name  = patch.full_name
@@ -330,7 +356,7 @@ function ExpandableNotes({ text, lines = 2 }) {
 const sessionsHash = (notes) => {
   if (!notes.length) return ''
   const last = notes[notes.length - 1]
-  return `${notes.length}:${last?.date ?? ''}`
+  return `${notes.length}:${last?.session_date ?? ''}`
 }
 
 async function generateSummary(notes) {
@@ -361,41 +387,95 @@ async function generateSummary(notes) {
 }
 
 function PatientQuickPanel({ p, onNavigate, updatePatient }) {
-  const sessions = Array.isArray(p.clinical_notes) ? p.clinical_notes : []
+  // Active assignment for this patient
+  const [assignment, setAssignment] = useState(null)
+  // Clinical notes (sessions) belonging to that assignment
+  const [sessions, setSessions]     = useState([])
+  const [loadingClin, setLoadingClin] = useState(true)
+  const [clinError, setClinError]   = useState(null)
+
+  // Load active assignment + clinical notes when selected patient changes
+  useEffect(() => {
+    let alive = true
+    setLoadingClin(true)
+    setClinError(null)
+    setAssignment(null)
+    setSessions([])
+
+    ;(async () => {
+      // 1. Find active assignment for this patient
+      const { data: aData, error: aErr } = await supabase
+        .from('patient_assignments')
+        .select('*')
+        .eq('patient_id', p.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (!alive) return
+      if (aErr) { setClinError(aErr.message); setLoadingClin(false); return }
+      if (!aData) {
+        // No active assignment — RLS may have blocked, or none exists
+        setLoadingClin(false)
+        return
+      }
+      setAssignment(aData)
+
+      // 2. Load clinical notes for that assignment
+      const { data: nData, error: nErr } = await supabase
+        .from('clinical_notes')
+        .select('*')
+        .eq('assignment_id', aData.id)
+        .order('session_date', { ascending: true })
+
+      if (!alive) return
+      if (nErr) { setClinError(nErr.message); setLoadingClin(false); return }
+      setSessions(nData ?? [])
+      setLoadingClin(false)
+    })()
+
+    return () => { alive = false }
+  }, [p.id])
+
   const recent   = [...sessions].slice(-3).reverse()
   const upcoming = (p._appts ?? []).filter(a => new Date(a.datetime) > new Date())
 
   const earliestSession = sessions
-    .map(s => s?.date)
+    .map(s => s?.session_date)
     .filter(Boolean)
     .sort()[0]
   const sinceDate = earliestSession ?? p.since ?? p.created_at ?? null
 
   const hash = sessionsHash(sessions)
-  const stored = (p.summary ?? '').trim()
-  const storedHash = p.summary_hash ?? ''
+  const stored = (assignment?.ai_summary ?? '').trim()
+  const storedHash = assignment?.ai_summary_hash ?? ''
   const cacheValid = stored && storedHash === hash
 
-  const [summary, setSummary] = useState(cacheValid ? stored : null)
+  const [summary, setSummary] = useState(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState(null)
 
   useEffect(() => {
     setSummaryError(null)
-    if (sessions.length === 0) { setSummary(null); return }
+    if (!assignment || sessions.length === 0) { setSummary(null); return }
     if (cacheValid) { setSummary(stored); return }
+
     let alive = true
     setSummaryLoading(true)
     generateSummary(sessions)
       .then(async text => {
         if (!alive) return
         setSummary(text)
-        await updatePatient({ summary: text, summary_hash: hash })
+        // Save to patient_assignments
+        const { error: upErr } = await supabase
+          .from('patient_assignments')
+          .update({ ai_summary: text, ai_summary_hash: hash, updated_at: new Date().toISOString() })
+          .eq('id', assignment.id)
+        if (upErr && alive) setSummaryError(upErr.message)
       })
       .catch(e => { if (alive) setSummaryError(e.message) })
       .finally(() => { if (alive) setSummaryLoading(false) })
     return () => { alive = false }
-  }, [p.id, hash])
+  }, [p.id, assignment?.id, hash])
 
   return (
     <div style={{ background: T.bgRaised, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
@@ -425,6 +505,12 @@ function PatientQuickPanel({ p, onNavigate, updatePatient }) {
       </div>
 
       <div style={{ padding: '18px 24px' }}>
+        {clinError && (
+          <div style={{ fontSize: 11.5, color: T.danger ?? T.ink, marginBottom: 8 }}>
+            {clinError}
+          </div>
+        )}
+
         <Collapsible icon="file" label="Resumen" defaultOpen>
           <div style={{
             background: avatarTint(p.full_name ?? '—'),
@@ -434,13 +520,17 @@ function PatientQuickPanel({ p, onNavigate, updatePatient }) {
             fontStyle: summary && !summaryLoading ? 'normal' : 'italic',
             display: 'flex', alignItems: 'center', gap: 8, minHeight: 20,
           }}>
-            {sessions.length === 0
-              ? 'Sin sesiones registradas aún.'
-              : summaryLoading
-                ? <><Spinner /> Generando resumen…</>
-                : summaryError
-                  ? `Error: ${summaryError}`
-                  : (summary || '—')}
+            {loadingClin
+              ? <><Spinner /> Cargando…</>
+              : !assignment
+                ? 'Sin profesional asignado para este paciente.'
+                : sessions.length === 0
+                  ? 'Sin sesiones registradas aún.'
+                  : summaryLoading
+                    ? <><Spinner /> Generando resumen…</>
+                    : summaryError
+                      ? `Error: ${summaryError}`
+                      : (summary || stored || '—')}
           </div>
         </Collapsible>
 
@@ -460,11 +550,11 @@ function PatientQuickPanel({ p, onNavigate, updatePatient }) {
           {recent.length === 0 && (
             <div style={{ fontSize: 12, color: T.inkMuted, fontStyle: 'italic', padding: '6px 0' }}>Sin sesiones registradas.</div>
           )}
-          {recent.map((s, i) => (
-            <div key={i} style={{ padding: '12px 14px', borderRadius: 10, marginBottom: 8, background: T.bgSunk, border: `1px solid ${T.lineSoft}` }}>
+          {recent.map((s) => (
+            <div key={s.id} style={{ padding: '12px 14px', borderRadius: 10, marginBottom: 8, background: T.bgSunk, border: `1px solid ${T.lineSoft}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{s.type ? `${s.type[0].toUpperCase()}${s.type.slice(1)}` : 'Sesión'}{s.duration_minutes ? ` · ${s.duration_minutes} min` : ''}</div>
-                <div style={{ fontFamily: T.mono, fontSize: 11, color: T.inkMuted }}>{fmtShortDate(s.date)}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>Sesión</div>
+                <div style={{ fontFamily: T.mono, fontSize: 11, color: T.inkMuted }}>{fmtShortDate(s.session_date)}</div>
               </div>
               <ExpandableNotes text={s.notes} lines={2} />
             </div>
