@@ -4,6 +4,7 @@ import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../lib/clientConfig.js'
 import { THEMES, DEFAULT_THEME_ID, getTheme } from '../config/themes.js'
+import ServiciosSesionesSettings from './settings/serviciosSesiones.jsx'
 
 export default function SettingsScreen({ onNavigate }) {
   const { professional, config, clientId, setConfig } = useContext(ClientCtx)
@@ -1843,21 +1844,6 @@ function TemplateSettings() {
   )
 }
 
-// ───── Servicios y Sesiones — placeholder, filled in TASK B ─────
-function ServiciosSesionesSettings() {
-  return (
-    <div style={{ padding: '24px 32px 40px', maxWidth: 880 }}>
-      <SettingsHeader title="Servicios y Sesiones" subtitle="Catálogo de servicios y precios del centro" />
-      <div style={{
-        marginTop: 4, padding: 40,
-        background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 12,
-        color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif, fontSize: 16, textAlign: 'center',
-      }}>
-        Próximamente
-      </div>
-    </div>
-  )
-}
 
 // ───── Integrations ─────
 function IntegrationsSettings() {
