@@ -122,6 +122,7 @@ export const Icon = ({ name, size = 16, stroke = 'currentColor', fill = 'none' }
     file:     <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></>,
     card:     <><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></>,
     cog:      <><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></>,
+    briefcase:<><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></>,
     search:   <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></>,
     filter:   <><path d="M4 5h16M7 12h10M10 19h4"/></>,
     bell:     <><path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16z"/><path d="M10 20a2 2 0 0 0 4 0"/></>,
@@ -224,11 +225,12 @@ export const CLP = (n) => '$' + n.toLocaleString('es-CL')
 
 // ───────────── sidebar ─────────────
 const ALL_ITEMS = [
-  { id: 'leads',    label: 'Leads',       icon: 'inbox' },
-  { id: 'calendar', label: 'Agenda',      icon: 'calendar' },
-  { id: 'patients', label: 'Pacientes',   icon: 'users' },
-  { id: 'billing',  label: 'Facturación', icon: 'card' },
-  { id: 'settings', label: 'Ajustes',     icon: 'cog' },
+  { id: 'leads',         label: 'Leads',         icon: 'inbox' },
+  { id: 'calendar',      label: 'Agenda',        icon: 'calendar' },
+  { id: 'patients',      label: 'Pacientes',     icon: 'users' },
+  { id: 'professionals', label: 'Profesionales', icon: 'user' },
+  { id: 'billing',       label: 'Facturación',   icon: 'card' },
+  { id: 'settings',      label: 'Ajustes',       icon: 'cog' },
 ]
 
 export const Sidebar = ({ active = 'leads', onNavigate }) => {

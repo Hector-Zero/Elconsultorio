@@ -23,41 +23,24 @@ export default function SettingsScreen({ onNavigate }) {
     return () => { alive = false }
   }, [clientId])
   const empresaMode = !!freshConfig?.modo_empresa
-  const [agendaNeedsSetup, setAgendaNeedsSetup] = useState(false)
-
-  // In empresa mode, flag the Agenda tab when any pro still has the
-  // default availability (i.e. they've never customized it).
-  useEffect(() => {
-    if (!empresaMode || !clientId) { setAgendaNeedsSetup(false); return }
-    let alive = true
-    supabase.from('professionals')
-      .select('availability').eq('client_id', clientId).eq('active', true)
-      .then(({ data }) => {
-        if (!alive) return
-        const defaultJson = JSON.stringify(DEFAULT_AVAILABILITY)
-        const anyDefault = (data ?? []).some(p => JSON.stringify(p.availability ?? {}) === defaultJson)
-        setAgendaNeedsSetup(anyDefault)
-      })
-    return () => { alive = false }
-  }, [empresaMode, clientId, config])
 
   const allSections = [
-    { id: 'profile',      label: 'Perfil profesional', icon: 'user' },
-    { id: 'empresa',      label: 'Empresa',            icon: 'home' },
-    { id: 'bot',          label: 'Bot de WhatsApp',    icon: 'sparkle', badge: 'Claude Sonnet 4.6' },
-    { id: 'templates',    label: 'Plantillas email',   icon: 'mail' },
-    { id: 'appearance',   label: 'Apariencia',         icon: 'sparkle' },
-    { id: 'agenda',       label: 'Agenda',             icon: 'calendar' },
-    { id: 'integrations', label: 'Integraciones',      icon: 'plug' },
-    { id: 'billing',      label: 'Plan & facturación', icon: 'card' },
+    { id: 'profile',       label: 'Perfil profesional',   icon: 'user' },
+    { id: 'empresa',       label: 'Empresa',              icon: 'home' },
+    { id: 'bot',           label: 'Bot de WhatsApp',      icon: 'sparkle', badge: 'Claude Sonnet 4.6' },
+    { id: 'templates',     label: 'Plantillas email',     icon: 'mail' },
+    { id: 'appearance',    label: 'Apariencia',           icon: 'sparkle' },
+    { id: 'session-types', label: 'Servicios y Sesiones', icon: 'briefcase' },
+    { id: 'integrations',  label: 'Integraciones',        icon: 'plug' },
+    { id: 'billing',       label: 'Plan & facturación',   icon: 'card' },
   ]
   let sectionOrder
   if (isPro) {
     sectionOrder = ['profile', 'appearance']
   } else if (empresaMode) {
-    sectionOrder = ['empresa', 'bot', 'templates', 'appearance', 'agenda', 'integrations', 'billing']
+    sectionOrder = ['empresa', 'bot', 'templates', 'appearance', 'session-types', 'integrations', 'billing']
   } else {
-    sectionOrder = ['profile', 'empresa', 'bot', 'templates', 'appearance', 'integrations', 'billing']
+    sectionOrder = ['profile', 'empresa', 'bot', 'templates', 'appearance', 'session-types', 'integrations', 'billing']
   }
   const sections = sectionOrder.map(id => allSections.find(s => s.id === id)).filter(Boolean)
 
@@ -106,12 +89,6 @@ export default function SettingsScreen({ onNavigate }) {
                 }}>
                   <Icon name={s.icon === 'plug' ? 'cog' : s.icon} size={15} stroke={on ? T.primary : T.inkSoft} />
                   <span style={{ flex: 1 }}>{s.label}</span>
-                  {s.id === 'agenda' && agendaNeedsSetup && (
-                    <span title="Falta configurar disponibilidad" style={{
-                      width: 8, height: 8, borderRadius: '50%',
-                      background: T.warn, boxShadow: `0 0 0 3px ${T.warnSoft}`,
-                    }} />
-                  )}
                   {s.badge && (
                     <span style={{ fontSize: 9.5, fontFamily: T.mono, padding: '2px 6px', borderRadius: 4, background: T.accentSoft, color: T.accent }}>{s.badge}</span>
                   )}
@@ -121,14 +98,14 @@ export default function SettingsScreen({ onNavigate }) {
           </nav>
 
           <div style={{ overflow: 'auto' }}>
-            {section === 'bot'          && <BotConfig />}
-            {section === 'profile'      && <ProfileSettings onDirtyChange={setProfileDirty} />}
-            {section === 'empresa'      && <EmpresaSettings onActivated={() => setSection('empresa')} onGoToAgendaSection={() => setSection('agenda')} />}
-            {section === 'templates'    && <TemplateSettings />}
-            {section === 'appearance'   && <AppearanceSettings />}
-            {section === 'agenda'       && <AgendaSettings />}
-            {section === 'integrations' && <IntegrationsSettings />}
-            {section === 'billing'      && <PlanSettings />}
+            {section === 'bot'           && <BotConfig />}
+            {section === 'profile'       && <ProfileSettings onDirtyChange={setProfileDirty} />}
+            {section === 'empresa'       && <EmpresaSettings onActivated={() => setSection('empresa')} onNavigate={onNavigate} />}
+            {section === 'templates'     && <TemplateSettings />}
+            {section === 'appearance'    && <AppearanceSettings />}
+            {section === 'session-types' && <ServiciosSesionesSettings />}
+            {section === 'integrations'  && <IntegrationsSettings />}
+            {section === 'billing'       && <PlanSettings />}
           </div>
         </div>
       </div>
@@ -811,7 +788,7 @@ function PerfilDisponibilidad({ clientId, config, availability, onAvailabilityLo
 }
 
 // ───── Empresa — modo empresa wizard + active form ─────
-function EmpresaSettings({ onActivated, onGoToAgendaSection }) {
+function EmpresaSettings({ onActivated, onNavigate }) {
   const { clientId, config, setConfig } = useContext(ClientCtx)
   const [wizard, setWizard] = useState(false)
   const [banner, setBanner] = useState(null) // { proName }
@@ -847,7 +824,7 @@ function EmpresaSettings({ onActivated, onGoToAgendaSection }) {
   const empresaMode = !!freshConfig?.modo_empresa
   console.log('[EmpresaSettings] render decision:', { empresaMode, willShowActiveForm: empresaMode })
   if (empresaMode) {
-    return <EmpresaActiveForm banner={banner} onGoToAgendaSection={onGoToAgendaSection} />
+    return <EmpresaActiveForm banner={banner} onNavigate={onNavigate} />
   }
   if (wizard) {
     return (
@@ -885,7 +862,7 @@ function EmpresaSettings({ onActivated, onGoToAgendaSection }) {
   )
 }
 
-function EmpresaActiveForm({ banner, onGoToAgendaSection }) {
+function EmpresaActiveForm({ banner, onNavigate }) {
   const { clientId, config, setConfig } = useContext(ClientCtx)
   const [nombre, setNombre]       = useState(config?.empresa?.nombre ?? '')
   const [rut, setRut]             = useState(config?.empresa?.rut ?? '')
@@ -959,7 +936,7 @@ function EmpresaActiveForm({ banner, onGoToAgendaSection }) {
           background: T.primarySoft, color: T.primary, border: `1px solid ${T.primary}`,
           fontSize: 13, lineHeight: 1.5,
         }}>
-          ✓ Modo empresa activado. Recuerda completar la agenda de <strong>{banner.proName}</strong> en Ajustes → Agenda.
+          ✓ Modo empresa activado. Recuerda completar la información de <strong>{banner.proName}</strong> en Profesionales.
         </div>
       )}
 
@@ -1014,8 +991,8 @@ function EmpresaActiveForm({ banner, onGoToAgendaSection }) {
       </div>
 
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-        <button style={btn('ghost')} onClick={() => onGoToAgendaSection?.()}>
-          Ve a Agenda para configurar a los profesionales →
+        <button style={btn('ghost')} onClick={() => onNavigate?.('professionals')}>
+          Ir a Profesionales →
         </button>
       </div>
     </div>
@@ -1861,6 +1838,22 @@ function TemplateSettings() {
           <button style={btn('ghost')}>Enviar prueba</button>
           <button style={btn('primary')}>Guardar</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ───── Servicios y Sesiones — placeholder, filled in TASK B ─────
+function ServiciosSesionesSettings() {
+  return (
+    <div style={{ padding: '24px 32px 40px', maxWidth: 880 }}>
+      <SettingsHeader title="Servicios y Sesiones" subtitle="Catálogo de servicios y precios del centro" />
+      <div style={{
+        marginTop: 4, padding: 40,
+        background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 12,
+        color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif, fontSize: 16, textAlign: 'center',
+      }}>
+        Próximamente
       </div>
     </div>
   )

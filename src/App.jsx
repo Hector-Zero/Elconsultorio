@@ -5,12 +5,13 @@ import { ClientCtx } from './lib/ClientCtx.js'
 import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
 import Login from './Login.jsx'
-import LeadsScreen    from './screens/leads.jsx'
-import AgendaScreen   from './screens/agenda.jsx'
-import PatientsScreen from './screens/patients.jsx'
-import FilesScreen    from './screens/files.jsx'
-import BillingScreen  from './screens/billing.jsx'
-import SettingsScreen from './screens/settings.jsx'
+import LeadsScreen         from './screens/leads.jsx'
+import AgendaScreen        from './screens/agenda.jsx'
+import PatientsScreen      from './screens/patients.jsx'
+import ProfessionalsScreen from './screens/professionals.jsx'
+import FilesScreen         from './screens/files.jsx'
+import BillingScreen       from './screens/billing.jsx'
+import SettingsScreen      from './screens/settings.jsx'
 
 class ErrorBoundary extends Component {
   state = { error: null }
@@ -32,12 +33,13 @@ class ErrorBoundary extends Component {
 }
 
 const SCREENS = {
-  leads:    LeadsScreen,
-  calendar: AgendaScreen,
-  patients: PatientsScreen,
-  files:    FilesScreen,
-  billing:  BillingScreen,
-  settings: SettingsScreen,
+  leads:         LeadsScreen,
+  calendar:      AgendaScreen,
+  patients:      PatientsScreen,
+  professionals: ProfessionalsScreen,
+  files:         FilesScreen,
+  billing:       BillingScreen,
+  settings:      SettingsScreen,
 }
 
 function useHash() {
