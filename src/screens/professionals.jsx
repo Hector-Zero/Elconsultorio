@@ -26,9 +26,10 @@ export default function ProfessionalsScreen({ onNavigate }) {
 
   async function fetchPros() {
     setLoading(true)
-    // Hide soft-deleted pros (active = false). They're preserved in the DB so
-    // historical appointments still resolve, but they don't appear in the
-    // list, calendar, or booking flow.
+    // active=false rows are kept around for things like vacation / leave or
+    // pros that have been manually deactivated; they shouldn't clutter the
+    // working list. Real deletions are hard DELETEs guarded by a pre-check
+    // (see startDelete + performDelete below).
     const { data, error } = await supabase
       .from('professionals')
       .select('id, full_name, email, color, photo_url, avatar_url, active, public_profile')
@@ -71,19 +72,66 @@ export default function ProfessionalsScreen({ onNavigate }) {
     setTimeout(() => setToast(null), ms)
   }
 
+  // Click X → run pre-check first. If the pro has any appointments or active
+  // patient assignments, surface a blocker modal explaining what to do. The
+  // appointments FK already enforces this at the DB level — we just want a
+  // friendly message instead of a Postgres error.
+  async function startDelete(p) {
+    const [a, pa] = await Promise.all([
+      supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('professional_id', p.id),
+      supabase
+        .from('patient_assignments')
+        .select('id', { count: 'exact', head: true })
+        .eq('professional_id', p.id)
+        .eq('status', 'active'),
+    ])
+    if (a.error || pa.error) {
+      flashToast({ kind: 'err', msg: `Error al verificar dependencias: ${(a.error ?? pa.error).message}` }, 3500)
+      return
+    }
+    const apptCount = a.count ?? 0
+    const patCount  = pa.count ?? 0
+    if (apptCount > 0 || patCount > 0) {
+      setConfirmDel({ pro: p, blocker: { appointments: apptCount, patients: patCount } })
+    } else {
+      setConfirmDel({ pro: p })
+    }
+  }
+
   async function performDelete(p) {
     setConfirmDel(null)
-    // Soft delete — appointments have a FK to professionals(id), so a hard
-    // DELETE would fail (or cascade away the booking history). Flip active
-    // to false instead; the list filter hides the row, but the row itself
-    // stays in the DB for audit + future reactivation.
-    const { error } = await supabase
-      .from('professionals')
-      .update({ active: false })
-      .eq('id', p.id)
-    if (error) { flashToast({ kind: 'err', msg: `Error al desactivar: ${error.message}` }, 3500); return }
+    // 1. Storage cleanup. We list the pro's folder in each bucket and remove
+    //    every file, BEFORE the DB delete — so a storage failure aborts the
+    //    delete cleanly instead of leaving orphaned blobs. Storage remove is
+    //    idempotent so a second click after a partial failure works.
+    for (const bucket of ['professional-photos', 'professional-documents']) {
+      const { data: files, error: listErr } = await supabase.storage.from(bucket).list(p.id, { limit: 1000 })
+      if (listErr) {
+        flashToast({ kind: 'err', msg: `Error listando archivos (${bucket}): ${listErr.message}` }, 3500)
+        return
+      }
+      if (files?.length) {
+        const paths = files.map(f => `${p.id}/${f.name}`)
+        const { error: rmErr } = await supabase.storage.from(bucket).remove(paths)
+        if (rmErr) {
+          flashToast({ kind: 'err', msg: `Error borrando archivos (${bucket}): ${rmErr.message}` }, 3500)
+          return
+        }
+      }
+    }
+    // 2. DB delete. professional_schedules / professional_session_types /
+    //    professional_documents cascade. patient_assignments.professional_id
+    //    is set to NULL by the FK rule (notes preserved).
+    const { error } = await supabase.from('professionals').delete().eq('id', p.id)
+    if (error) {
+      flashToast({ kind: 'err', msg: `Error al eliminar: ${error.message}` }, 3500)
+      return
+    }
     setPros(list => list.filter(x => x.id !== p.id))
-    flashToast({ kind: 'ok', msg: '✓ Profesional desactivado' })
+    flashToast({ kind: 'ok', msg: '✓ Profesional eliminado' })
   }
 
   const limitReached = pros.length >= MAX_PROS
@@ -147,7 +195,7 @@ export default function ProfessionalsScreen({ onNavigate }) {
                   pro={p}
                   workingDays={scheduleDays[p.id]}
                   onClick={() => setEditing(p)}
-                  onDelete={() => setConfirmDel(p)}
+                  onDelete={() => startDelete(p)}
                 />
               ))}
             </div>
@@ -175,14 +223,25 @@ export default function ProfessionalsScreen({ onNavigate }) {
         />
       )}
 
-      {confirmDel && (
+      {confirmDel && confirmDel.blocker && (
         <ConfirmModal
-          title={`¿Desactivar a ${confirmDel.full_name}?`}
-          description="El profesional dejará de aparecer en la agenda y en las reservas, pero su historial se conservará."
-          confirmLabel="Desactivar"
+          title="No se puede eliminar"
+          description={renderBlockerBody(confirmDel.pro, confirmDel.blocker)}
+          confirmLabel="Entendido"
+          cancelLabel={null}
+          onCancel={() => setConfirmDel(null)}
+          onConfirm={() => setConfirmDel(null)}
+        />
+      )}
+
+      {confirmDel && !confirmDel.blocker && (
+        <ConfirmModal
+          title="¿Eliminar profesional?"
+          description={`${confirmDel.pro.full_name}. Esta acción es permanente y no se puede deshacer.`}
+          confirmLabel="Eliminar"
           variant="danger"
           onCancel={() => setConfirmDel(null)}
-          onConfirm={() => performDelete(confirmDel)}
+          onConfirm={() => performDelete(confirmDel.pro)}
         />
       )}
     </div>
@@ -237,7 +296,7 @@ function ProCard({ pro, workingDays, onClick, onDelete }) {
 
       <button
         onClick={e => { e.stopPropagation(); onDelete?.() }}
-        title="Desactivar"
+        title="Eliminar"
         style={{
           background: 'transparent', border: 'none', cursor: 'pointer',
           color: T.inkMuted, padding: 6, borderRadius: 6,
@@ -665,6 +724,23 @@ function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, onNaviga
 }
 
 // ───── Tiny shared bits ─────
+function renderBlockerBody(pro, blocker) {
+  const parts = []
+  if (blocker.appointments > 0) parts.push(`${blocker.appointments} cita${blocker.appointments === 1 ? '' : 's'} agendada${blocker.appointments === 1 ? '' : 's'}`)
+  if (blocker.patients > 0)     parts.push(`${blocker.patients} paciente${blocker.patients === 1 ? '' : 's'} asignado${blocker.patients === 1 ? '' : 's'}`)
+  return (
+    <>
+      <div>
+        <strong>{pro.full_name}</strong> tiene {parts.join(' y ')}. Antes de eliminar este profesional debes:
+      </div>
+      <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 22, lineHeight: 1.6 }}>
+        {blocker.appointments > 0 && <li>Reasignar o cancelar todas sus citas en la Agenda</li>}
+        {blocker.patients > 0     && <li>Reasignar sus pacientes a otro profesional</li>}
+      </ul>
+    </>
+  )
+}
+
 function FieldLabel({ children }) {
   return (
     <div style={{
