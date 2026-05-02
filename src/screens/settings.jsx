@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react'
-import { T, Icon, Sidebar, TopBar, btn, SectionLabel, avatarTint, avatarInk, applyTheme, TimePicker, ConfirmModal } from './shared.jsx'
+import { T, Icon, Sidebar, TopBar, btn, SectionLabel, avatarTint, avatarInk, applyTheme, TimePicker, ConfirmModal, initials, PRO_COLORS } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../lib/clientConfig.js'
@@ -529,7 +529,7 @@ function ProfileSettings({ onDirtyChange }) {
     const proPatch = {}
     if (trimmedName) {
       proPatch.full_name = trimmedName
-      proPatch.initials  = initialsOf(trimmedName)
+      proPatch.initials  = initials(trimmedName)
       proPatch.email     = resendFrom || existing?.email || ''
     }
     if (availability) proPatch.availability = availability
@@ -547,7 +547,7 @@ function ProfileSettings({ onDirtyChange }) {
       const seed = {
         client_id:    clientId,
         full_name:    proPatch.full_name || trimmedName || '',
-        initials:     proPatch.initials  || initialsOf(trimmedName || ''),
+        initials:     proPatch.initials  || initials(trimmedName || ''),
         email:        proPatch.email     || resendFrom || '',
         color:        PRO_COLORS[0],
         active:       true,
@@ -1053,7 +1053,7 @@ function EmpresaWizard({ onCancel, onActivated }) {
       .insert({
         client_id: clientId,
         full_name: proName.trim(),
-        initials:  initialsOf(proName),
+        initials:  initials(proName),
         email:     proEmail.trim(),
         color:     proColor,
         availability,
@@ -1344,7 +1344,11 @@ function ThemePreview({ theme }) {
   )
 }
 
-// ───── Agenda — professionals + agenda hours ─────
+// ───── Legacy availability shape ─────
+// Used by ProfileSettings + PerfilDisponibilidad + EmpresaWizard to write the
+// professionals.availability JSON column. The Profesionales screen and the
+// agenda calendar both read from professional_schedules now; this column is
+// kept as a backup write target only.
 const DEFAULT_AVAILABILITY = {
   monday:    { start: '09:00', end: '18:00', available: true },
   tuesday:   { start: '09:00', end: '18:00', available: true },
@@ -1358,397 +1362,6 @@ const DAYS = [
   ['monday', 'Lunes'], ['tuesday', 'Martes'], ['wednesday', 'Miércoles'],
   ['thursday', 'Jueves'], ['friday', 'Viernes'], ['saturday', 'Sábado'], ['sunday', 'Domingo'],
 ]
-const PRO_COLORS = ['#2f4a3a', '#0077b6', '#7c5cbf', '#d4688a', '#e07a3a', '#9a4a3f']
-const MAX_PROS = 5
-
-function initialsOf(name) {
-  return (name ?? '').trim().split(/\s+/).slice(0, 2).map(s => s[0] ?? '').join('').toUpperCase() || '?'
-}
-
-function AgendaSettings() {
-  const { clientId, config, setConfig } = useContext(ClientCtx)
-  const [pros, setPros]       = useState([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(null) // null | 'new' | proObj
-  const [toast, setToast]     = useState(null)
-  const [confirmDel, setConfirmDel] = useState(null) // pro to delete
-
-  const settings = config?.agenda_settings ?? { day_start: '08:00', day_end: '20:00', default_duration: 50 }
-  const [dayStart, setDayStart]               = useState(settings.day_start)
-  const [dayEnd, setDayEnd]                   = useState(settings.day_end)
-  const [defaultDuration, setDefaultDuration] = useState(settings.default_duration)
-  const [savingHours, setSavingHours]         = useState(false)
-
-  // Independent fresh fetch on mount: professionals list + agenda_settings.
-  // This makes Ajustes → Agenda always reflect DB truth, regardless of any
-  // stale ClientCtx snapshot.
-  useEffect(() => {
-    if (!clientId) return
-    let alive = true
-    Promise.all([
-      supabase.from('professionals').select('*').eq('client_id', clientId).order('created_at'),
-      fetchClientConfig(clientId),
-    ]).then(([{ data: prosData }, { config: fresh }]) => {
-      if (!alive) return
-      setPros(prosData ?? [])
-      setLoading(false)
-      const s = fresh?.agenda_settings
-      if (s) {
-        setDayStart(s.day_start ?? '08:00')
-        setDayEnd(s.day_end ?? '20:00')
-        setDefaultDuration(s.default_duration ?? 50)
-      }
-      if (fresh) setConfig(fresh)
-    })
-    return () => { alive = false }
-  }, [clientId])
-
-  useEffect(() => {
-    const s = config?.agenda_settings
-    if (!s) return
-    setDayStart(s.day_start ?? '08:00')
-    setDayEnd(s.day_end ?? '20:00')
-    setDefaultDuration(s.default_duration ?? 50)
-  }, [config])
-
-  async function performDelete(p) {
-    setConfirmDel(null)
-    const { error } = await supabase.from('professionals').delete().eq('id', p.id)
-    if (error) { setToast({ kind: 'err', msg: 'Error al eliminar' }); return }
-    setPros(list => list.filter(x => x.id !== p.id))
-  }
-
-  async function handleSavedPro(saved, isFirst) {
-    setPros(list => {
-      const idx = list.findIndex(x => x.id === saved.id)
-      if (idx >= 0) { const next = [...list]; next[idx] = saved; return next }
-      return [...list, saved]
-    })
-    if (isFirst) {
-      // Migrate orphaned appointments to this default professional
-      await supabase.from('appointments')
-        .update({ professional_id: saved.id })
-        .eq('client_id', clientId)
-        .is('professional_id', null)
-    }
-    setEditing(null)
-    setToast({ kind: 'ok', msg: '✓ Guardado' })
-    setTimeout(() => setToast(null), 2200)
-  }
-
-  async function saveHours() {
-    setSavingHours(true)
-    const { error, config: nextConfig } = await mergeClientConfig(clientId, {
-      agenda_settings: { day_start: dayStart, day_end: dayEnd, default_duration: Number(defaultDuration) },
-    })
-    setSavingHours(false)
-    if (error) { setToast({ kind: 'err', msg: 'Error al guardar' }); return }
-    setConfig(nextConfig)
-    setToast({ kind: 'ok', msg: '✓ Guardado' })
-    setTimeout(() => setToast(null), 2200)
-  }
-
-  const limitReached = pros.length >= MAX_PROS
-
-  return (
-    <div style={{ padding: '24px 32px 40px', maxWidth: 880 }}>
-      <SettingsHeader title="Agenda" subtitle="Profesionales y configuración general de la agenda" />
-
-      <div style={{ marginTop: 4, marginBottom: 14 }}>
-        <SectionLabel icon="user" label={`Profesionales (${pros.length}/${MAX_PROS})`} />
-      </div>
-
-      {loading ? (
-        <div style={{ padding: 24, color: T.inkMuted, fontStyle: 'italic' }}>cargando…</div>
-      ) : (
-        <div style={{ background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 12, overflow: 'hidden' }}>
-          {pros.length === 0 && (
-            <div style={{ padding: 20, fontSize: 13, color: T.inkMuted, textAlign: 'center' }}>
-              No hay profesionales. Agrega el primero para asignar tus citas existentes.
-            </div>
-          )}
-          {pros.map((p, idx) => (
-            <div key={p.id} style={{
-              padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
-              borderBottom: idx < pros.length - 1 ? `1px solid ${T.lineSoft}` : 'none',
-            }}>
-              <ProAvatar pro={p} size={36} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, color: T.ink, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {p.full_name}
-                  <span title={p.color} style={{ width: 10, height: 10, borderRadius: '50%', background: p.color, border: `1px solid ${T.line}` }} />
-                </div>
-                <div style={{ fontSize: 11.5, color: T.inkMuted, marginTop: 2 }}>
-                  {p.email ?? '— sin email —'} · {availabilitySummary(p.availability)}
-                </div>
-              </div>
-              <button style={btn('ghostSm')} onClick={() => setEditing(p)}>
-                <Icon name="edit" size={13} stroke={T.inkSoft} />
-              </button>
-              <button style={btn('ghostSm')} onClick={() => setConfirmDel(p)} title="Eliminar">
-                <Icon name="x" size={13} stroke={T.inkSoft} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ marginTop: 12 }}>
-        <button
-          style={{ ...btn('ghost'), opacity: limitReached ? 0.5 : 1, cursor: limitReached ? 'not-allowed' : 'pointer' }}
-          onClick={() => !limitReached && setEditing('new')}
-          disabled={limitReached}
-          title={limitReached ? 'Límite alcanzado' : ''}
-        >
-          <Icon name="plus" size={13} /> {limitReached ? 'Límite alcanzado' : 'Agregar profesional'}
-        </button>
-      </div>
-
-      <div style={{ marginTop: 32, marginBottom: 14 }}>
-        <SectionLabel icon="cog" label="Configuración general de agenda" />
-      </div>
-
-      <div style={{ background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 12, padding: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-          <div>
-            <div style={{ fontSize: 11, color: T.inkMuted, marginBottom: 6, letterSpacing: 0.4, textTransform: 'uppercase' }}>Inicio del día</div>
-            <TimePicker value={dayStart} onChange={setDayStart} hourRange={[6, 12]} />
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: T.inkMuted, marginBottom: 6, letterSpacing: 0.4, textTransform: 'uppercase' }}>Fin del día</div>
-            <TimePicker value={dayEnd} onChange={setDayEnd} hourRange={[14, 23]} />
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: T.inkMuted, marginBottom: 6, letterSpacing: 0.4, textTransform: 'uppercase' }}>Duración por defecto</div>
-            <select value={defaultDuration} onChange={e => setDefaultDuration(+e.target.value)} style={textInput}>
-              <option value={30}>30 min</option>
-              <option value={50}>50 min</option>
-              <option value={60}>60 min</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
-        {toast?.kind === 'ok'  && <span style={{ fontSize: 12, color: T.confirmado }}>{toast.msg}</span>}
-        {toast?.kind === 'err' && <span style={{ fontSize: 12, color: T.danger }}>{toast.msg}</span>}
-        <button style={btn('primary')} onClick={saveHours} disabled={savingHours}>
-          {savingHours ? 'Guardando…' : 'Guardar configuración'}
-        </button>
-      </div>
-
-      {editing && (
-        <ProfessionalEditor
-          clientId={clientId}
-          pro={editing === 'new' ? null : editing}
-          isFirst={editing === 'new' && pros.length === 0}
-          onClose={() => setEditing(null)}
-          onSaved={handleSavedPro}
-          defaultName={editing === 'new' ? (config?.bot_name ?? '') : ''}
-        />
-      )}
-
-      {confirmDel && (
-        <ConfirmModal
-          title={`¿Eliminar a ${confirmDel.full_name}?`}
-          description="Sus citas no se borran pero quedarán sin profesional asignado."
-          confirmLabel="Eliminar"
-          variant="danger"
-          onCancel={() => setConfirmDel(null)}
-          onConfirm={() => performDelete(confirmDel)}
-        />
-      )}
-    </div>
-  )
-}
-
-function ProAvatar({ pro, size = 32 }) {
-  const inits = pro.initials || initialsOf(pro.full_name)
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: pro.avatar_url ? T.bgSunk : pro.color,
-      color: '#fff', display: 'grid', placeItems: 'center',
-      fontFamily: T.sans, fontSize: size * 0.4, fontWeight: 600,
-      overflow: 'hidden', border: `1px solid ${T.line}`,
-    }}>
-      {pro.avatar_url
-        ? <img src={pro.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        : inits}
-    </div>
-  )
-}
-
-function availabilitySummary(av) {
-  if (!av) return 'sin horario'
-  const days = DAYS.filter(([k]) => av[k]?.available)
-  if (!days.length) return 'sin disponibilidad'
-  const labels = days.map(([_, l]) => l.slice(0, 3)).join(', ')
-  return labels
-}
-
-function ProfessionalEditor({ clientId, pro, isFirst, defaultName, onClose, onSaved }) {
-  const [name, setName]     = useState(pro?.full_name ?? defaultName ?? '')
-  const [email, setEmail]   = useState(pro?.email ?? '')
-  const [color, setColor]   = useState(pro?.color ?? PRO_COLORS[0])
-  const [avatarUrl, setAvatarUrl] = useState(pro?.avatar_url ?? '')
-  const [pendingFile, setPendingFile] = useState(null)
-  const [availability, setAvailability] = useState(pro?.availability ?? DEFAULT_AVAILABILITY)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr]       = useState(null)
-  const fileRef = React.useRef(null)
-
-  function pickFile(e) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setPendingFile(f)
-    setAvatarUrl(URL.createObjectURL(f))
-  }
-
-  function setDay(key, patch) {
-    setAvailability(av => ({ ...av, [key]: { ...av[key], ...patch } }))
-  }
-
-  async function uploadAvatar(proId) {
-    if (!pendingFile) return null
-    const ext = (pendingFile.name.split('.').pop() || 'jpg').toLowerCase()
-    const path = `professionals/${proId}.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, pendingFile, { upsert: true, contentType: pendingFile.type })
-    if (upErr) return null
-    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-    return `${data.publicUrl}?v=${Date.now()}`
-  }
-
-  async function save() {
-    if (!name.trim()) { setErr('Nombre requerido'); return }
-    if (!email.trim()) { setErr('Email requerido'); return }
-    setSaving(true); setErr(null)
-
-    const base = {
-      client_id: clientId,
-      full_name: name.trim(),
-      initials:  initialsOf(name),
-      email:     email.trim(),
-      color,
-      availability,
-    }
-
-    let row
-    if (pro?.id) {
-      const { data, error } = await supabase.from('professionals').update(base).eq('id', pro.id).select().single()
-      if (error) { setSaving(false); setErr(error.message); return }
-      row = data
-    } else {
-      const { data, error } = await supabase.from('professionals').insert(base).select().single()
-      if (error) { setSaving(false); setErr(error.message); return }
-      row = data
-    }
-
-    if (pendingFile) {
-      const url = await uploadAvatar(row.id)
-      if (url) {
-        const { data } = await supabase.from('professionals').update({ avatar_url: url }).eq('id', row.id).select().single()
-        if (data) row = data
-      }
-    }
-
-    setSaving(false)
-    onSaved(row, isFirst)
-  }
-
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.4)',
-      display: 'grid', placeItems: 'center', zIndex: 50,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: 560, maxHeight: '90vh', overflow: 'auto',
-        background: T.bgRaised, borderRadius: 14,
-        boxShadow: '0 24px 60px rgba(20,18,14,0.25)',
-      }}>
-        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${T.lineSoft}` }}>
-          <div style={{ fontFamily: T.serif, fontSize: 22, color: T.ink }}>
-            {pro ? 'Editar profesional' : 'Nuevo profesional'}
-          </div>
-        </div>
-
-        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <div onClick={() => fileRef.current?.click()} style={{
-              width: 64, height: 64, borderRadius: '50%', cursor: 'pointer',
-              background: avatarUrl ? T.bgSunk : color, color: '#fff',
-              display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 22,
-              overflow: 'hidden', border: `1px solid ${T.line}`,
-            }}>
-              {avatarUrl
-                ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : initialsOf(name)}
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickFile} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 6 }}>Foto de perfil</div>
-              <button style={btn('ghost')} onClick={() => fileRef.current?.click()}>
-                <Icon name="download" size={13} /> Subir foto
-              </button>
-            </div>
-          </div>
-
-          <Field2 label="Nombre completo">
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Dra. Paz Correa" style={textInput} />
-          </Field2>
-          <Field2 label="Email">
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="paz@consultorio.cl" style={textInput} />
-          </Field2>
-
-          <Field2 label="Color">
-            <div style={{ display: 'flex', gap: 8 }}>
-              {PRO_COLORS.map(c => (
-                <button key={c} type="button" onClick={() => setColor(c)} style={{
-                  width: 30, height: 30, borderRadius: '50%', cursor: 'pointer',
-                  background: c, border: color === c ? `3px solid ${T.ink}` : `1px solid ${T.line}`,
-                }} />
-              ))}
-            </div>
-          </Field2>
-
-          <div>
-            <SectionLabel icon="calendar" label="Disponibilidad semanal" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {DAYS.map(([key, label]) => {
-                const d = availability[key] ?? { start: '09:00', end: '18:00', available: false }
-                return (
-                  <div key={key} style={{
-                    display: 'grid', gridTemplateColumns: '90px 60px 1fr 1fr', gap: 10,
-                    alignItems: 'center', padding: '6px 0',
-                  }}>
-                    <div style={{ fontSize: 12.5, color: T.ink }}>{label}</div>
-                    <SmallToggle value={d.available} onChange={(v) => setDay(key, { available: v })} />
-                    <div style={{ opacity: d.available ? 1 : 0.4, pointerEvents: d.available ? 'auto' : 'none' }}>
-                      <TimePicker value={d.start} onChange={(v) => setDay(key, { start: v })} hourRange={[6, 14]} />
-                    </div>
-                    <div style={{ opacity: d.available ? 1 : 0.4, pointerEvents: d.available ? 'auto' : 'none' }}>
-                      <TimePicker value={d.end} onChange={(v) => setDay(key, { end: v })} hourRange={[12, 23]} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {err && <div style={{ fontSize: 12, color: T.danger ?? '#c33' }}>{err}</div>}
-        </div>
-
-        <div style={{ padding: '14px 24px', borderTop: `1px solid ${T.lineSoft}`, background: T.bg, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose} style={btn('ghost')} disabled={saving}>Cancelar</button>
-          <button onClick={save} style={btn('primary')} disabled={saving}>
-            {saving ? 'Guardando…' : 'Guardar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function Field2({ label, children }) {
   return (
     <div>

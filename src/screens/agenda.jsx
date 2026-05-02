@@ -13,6 +13,26 @@ const STATUS_LABELS = {
 }
 
 const DOW_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+// Postgres day_of_week → JS-style dowKey used in this screen ('monday', etc).
+// 0 = Sunday … 6 = Saturday matches both Postgres EXTRACT(DOW) and the
+// professional_schedules.day_of_week convention.
+const DOW_KEY_BY_NUM = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+// Build { [proId]: { [dowKey]: [{ start, end }, ...] } } from raw rows of
+// professional_schedules. Multiple ranges per day (split shifts) are preserved.
+function buildAvailabilityMap(scheduleRows) {
+  const out = {}
+  for (const r of scheduleRows ?? []) {
+    const proId = r.professional_id
+    const key   = DOW_KEY_BY_NUM[r.day_of_week]
+    if (!proId || !key) continue
+    out[proId] ??= {}
+    out[proId][key] ??= []
+    out[proId][key].push({ start: r.start_time, end: r.end_time })
+  }
+  return out
+}
 const MONTHS    = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const HOURS     = ['09','10','11','12','13','14','15','16','17','18','19']
 
@@ -154,21 +174,50 @@ export default function AgendaScreen({ onNavigate }) {
 
   useEffect(() => {
     if (!clientId) return
-    if (isPro) {
-      // In professional mode, the only "professional" visible is the user themselves.
-      setPros([professional])
-      setSelectedProIds(new Set([professional.id]))
-      return
-    }
-    supabase.from('professionals').select('*').eq('client_id', clientId).eq('active', true).order('created_at')
-      .then(({ data }) => {
-        const list = data ?? []
-        setPros(list)
-        if (empresaMode && list.length > 0) {
-          // empresa mode: default to first professional, never "Todos"
-          setSelectedProIds(new Set([list[0].id]))
+    let alive = true
+    async function load() {
+      // 1. Determine base professionals.
+      let basePros = []
+      if (isPro) {
+        basePros = professional ? [professional] : []
+      } else {
+        const { data } = await supabase
+          .from('professionals')
+          .select('*')
+          .eq('client_id', clientId)
+          .eq('active', true)
+          .order('created_at')
+        basePros = data ?? []
+      }
+
+      // 2. Hydrate availability from professional_schedules. We deliberately
+      //    overwrite the legacy professionals.availability JSON column so the
+      //    calendar reads only from the new schedules table. The legacy column
+      //    is left in the DB as a backup, but never read here.
+      if (basePros.length) {
+        const ids = basePros.map(p => p.id).filter(Boolean)
+        if (ids.length) {
+          const { data: scheds } = await supabase
+            .from('professional_schedules')
+            .select('professional_id, day_of_week, start_time, end_time')
+            .in('professional_id', ids)
+            .eq('active', true)
+          const map = buildAvailabilityMap(scheds ?? [])
+          basePros = basePros.map(p => ({ ...p, availability: map[p.id] ?? {} }))
         }
-      })
+      }
+
+      if (!alive) return
+      setPros(basePros)
+      if (isPro && basePros.length) {
+        setSelectedProIds(new Set([basePros[0].id]))
+      } else if (!isPro && empresaMode && basePros.length > 0) {
+        // empresa mode: default to first professional, never "Todos"
+        setSelectedProIds(new Set([basePros[0].id]))
+      }
+    }
+    load()
+    return () => { alive = false }
   }, [clientId, isPro, professional?.id, empresaMode])
 
   const proById = React.useMemo(() => Object.fromEntries(pros.map(p => [p.id, p])), [pros])
@@ -1009,11 +1058,16 @@ function MultiDayGrid({ day, pros, appts, statusOpenId, setStatusOpenId, changeS
           }}>{h}:00</div>
           {pros.map(p => {
             const ev = (apptByPro[`${p.id}-${h}`] ?? [])[0]
-            const av = p.availability?.[dowKey]
+            const ranges = p.availability?.[dowKey]
             const hr = parseInt(h, 10)
-            const inAvail = av?.available
-              && hr >= parseInt((av.start ?? '00:00').split(':')[0], 10)
-              && hr <  parseInt((av.end   ?? '23:59').split(':')[0], 10)
+            // A cell at hour `hr` is available if any schedule range covers it.
+            // Hour granularity (matches the legacy semantics): hr is in if
+            // hr >= floor(start) and hr < floor(end).
+            const inAvail = Array.isArray(ranges) && ranges.some(r => {
+              const startH = parseInt((r.start ?? '00:00').split(':')[0], 10)
+              const endH   = parseInt((r.end   ?? '23:59').split(':')[0], 10)
+              return hr >= startH && hr < endH
+            })
             const slotDt = new Date(day); slotDt.setHours(hr, 0, 0, 0)
             const isPast = slotDt < nowChile()
             const blocked = !inAvail || isPast

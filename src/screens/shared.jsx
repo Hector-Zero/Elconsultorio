@@ -202,9 +202,12 @@ export const timeAgo = (iso) => {
 }
 
 export const initials = (name) => {
-  if (!name) return '?'
-  return name.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase()
+  return (name ?? '').trim().split(/\s+/).slice(0, 2).map(s => s[0] ?? '').join('').toUpperCase() || '?'
 }
+
+// Shared by Empresa wizard, Profesionales screen, and pro avatars across the app.
+export const PRO_COLORS = ['#2f4a3a', '#0077b6', '#7c5cbf', '#d4688a', '#e07a3a', '#9a4a3f']
+export const MAX_PROS = 5
 
 export const avatarTint = (name) => {
   const hues = [18, 32, 140, 160, 200, 220, 260, 330]

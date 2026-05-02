@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { T, Icon } from '../shared.jsx'
+import { T, Icon, initials as nameInitials } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const textInput = {
@@ -15,10 +15,6 @@ const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 function safeName(name) {
   return (name ?? 'file').replace(/[^a-z0-9.\-_]/gi, '_').slice(0, 120)
-}
-
-function initialsOf(name) {
-  return (name ?? '').trim().split(/\s+/).slice(0, 2).map(s => s[0] ?? '').join('').toUpperCase() || '?'
 }
 
 export default function PhotoBioSection({ value, onChange, professionalId, displayName, color, disabled }) {
@@ -103,7 +99,7 @@ export default function PhotoBioSection({ value, onChange, professionalId, displ
     patch({ specialties: list.filter((_, i) => i !== idx) })
   }
 
-  const initials = initialsOf(displayName)
+  const inits = nameInitials(displayName)
   const ringColor = color || T.primary
   const photoSize = 96
   const blockingMessage = !professionalId ? 'Guarda primero el profesional para subir foto' : null
@@ -135,7 +131,7 @@ export default function PhotoBioSection({ value, onChange, professionalId, displ
         >
           {photoUrl
             ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : initials}
+            : inits}
           {(hovering && !disabled && !blockingMessage) && (
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '50%',

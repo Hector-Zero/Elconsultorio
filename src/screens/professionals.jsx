@@ -1,18 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react'
-import { T, Icon, Sidebar, TopBar, btn, ConfirmModal, SectionLabel } from './shared.jsx'
+import { T, Icon, Sidebar, TopBar, btn, ConfirmModal, SectionLabel, initials, PRO_COLORS, MAX_PROS } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
 import PhotoBioSection      from './professionals/photoBioSection.jsx'
-import ScheduleSection, { DAYS, newRange } from './professionals/scheduleSection.jsx'
+import ScheduleSection, { DAYS } from './professionals/scheduleSection.jsx'
 import SessionTypesSection  from './professionals/sessionTypesSection.jsx'
 import DocumentsSection     from './professionals/documentsSection.jsx'
-
-const PRO_COLORS = ['#2f4a3a', '#0077b6', '#7c5cbf', '#d4688a', '#e07a3a', '#9a4a3f']
-const MAX_PROS = 5
-
-function initialsOf(name) {
-  return (name ?? '').trim().split(/\s+/).slice(0, 2).map(s => s[0] ?? '').join('').toUpperCase() || '?'
-}
 
 const textInput = {
   padding: '10px 12px', borderRadius: 8,
@@ -210,7 +203,7 @@ function ProCard({ pro, workingDays, onClick, onDelete }) {
       }}>
         {photo
           ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : initialsOf(pro.full_name)}
+          : initials(pro.full_name)}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -468,7 +461,7 @@ function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, onNaviga
       const proRow = {
         client_id:        clientId,
         full_name:        basic.full_name.trim(),
-        initials:         initialsOf(basic.full_name),
+        initials:         initials(basic.full_name),
         email:            basic.email.trim(),
         color:            basic.color,
         active:           !!basic.active,
