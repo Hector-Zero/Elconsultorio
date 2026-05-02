@@ -26,10 +26,14 @@ export default function ProfessionalsScreen({ onNavigate }) {
 
   async function fetchPros() {
     setLoading(true)
+    // Hide soft-deleted pros (active = false). They're preserved in the DB so
+    // historical appointments still resolve, but they don't appear in the
+    // list, calendar, or booking flow.
     const { data, error } = await supabase
       .from('professionals')
       .select('id, full_name, email, color, photo_url, avatar_url, active, public_profile')
       .eq('client_id', clientId)
+      .eq('active', true)
       .order('created_at', { ascending: true })
     if (error) {
       setToast({ kind: 'err', msg: 'Error al cargar profesionales' })
@@ -69,10 +73,17 @@ export default function ProfessionalsScreen({ onNavigate }) {
 
   async function performDelete(p) {
     setConfirmDel(null)
-    const { error } = await supabase.from('professionals').delete().eq('id', p.id)
-    if (error) { flashToast({ kind: 'err', msg: `Error al eliminar: ${error.message}` }, 3500); return }
+    // Soft delete — appointments have a FK to professionals(id), so a hard
+    // DELETE would fail (or cascade away the booking history). Flip active
+    // to false instead; the list filter hides the row, but the row itself
+    // stays in the DB for audit + future reactivation.
+    const { error } = await supabase
+      .from('professionals')
+      .update({ active: false })
+      .eq('id', p.id)
+    if (error) { flashToast({ kind: 'err', msg: `Error al desactivar: ${error.message}` }, 3500); return }
     setPros(list => list.filter(x => x.id !== p.id))
-    flashToast({ kind: 'ok', msg: '✓ Profesional eliminado' })
+    flashToast({ kind: 'ok', msg: '✓ Profesional desactivado' })
   }
 
   const limitReached = pros.length >= MAX_PROS
@@ -166,9 +177,9 @@ export default function ProfessionalsScreen({ onNavigate }) {
 
       {confirmDel && (
         <ConfirmModal
-          title={`¿Eliminar a ${confirmDel.full_name}?`}
-          description="Sus citas no se borran pero quedarán sin profesional asignado."
-          confirmLabel="Eliminar"
+          title={`¿Desactivar a ${confirmDel.full_name}?`}
+          description="El profesional dejará de aparecer en la agenda y en las reservas, pero su historial se conservará."
+          confirmLabel="Desactivar"
           variant="danger"
           onCancel={() => setConfirmDel(null)}
           onConfirm={() => performDelete(confirmDel)}
@@ -226,7 +237,7 @@ function ProCard({ pro, workingDays, onClick, onDelete }) {
 
       <button
         onClick={e => { e.stopPropagation(); onDelete?.() }}
-        title="Eliminar"
+        title="Desactivar"
         style={{
           background: 'transparent', border: 'none', cursor: 'pointer',
           color: T.inkMuted, padding: 6, borderRadius: 6,

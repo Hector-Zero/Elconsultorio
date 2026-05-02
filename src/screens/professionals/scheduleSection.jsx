@@ -1,5 +1,6 @@
 import React from 'react'
 import { T, Icon } from '../shared.jsx'
+import TimeSelect from '../../components/TimeSelect.jsx'
 
 // Postgres convention: 0 = Sunday, 1 = Monday … 6 = Saturday.
 // We display Mon → Sun (Chilean week), but persist with these values.
@@ -13,25 +14,11 @@ export const DAYS = [
   { value: 0, label: 'Domingo',   short: 'Dom' },
 ]
 
-const timeInput = {
-  padding: '6px 8px', borderRadius: 6,
-  border: `1px solid ${T.line}`, background: T.bg,
-  fontSize: 13, color: T.ink, fontFamily: T.mono, outline: 'none',
-  width: 100,
-}
-
 let _keySeq = 0
 function nextKey() { return `r${++_keySeq}_${Date.now()}` }
 
 export function newRange(day_of_week) {
   return { _key: nextKey(), day_of_week, start_time: '09:00', end_time: '13:00' }
-}
-
-// Normalize "09:00:00" or "09:00" → "HH:MM" for the <input type=time>.
-function toHHMM(t) {
-  if (!t) return ''
-  const m = String(t).match(/^(\d{2}:\d{2})/)
-  return m ? m[1] : String(t)
 }
 
 export default function ScheduleSection({ value, onChange }) {
@@ -65,19 +52,15 @@ export default function ScheduleSection({ value, onChange }) {
                 </div>
               )}
               {dayRanges.map(r => (
-                <div key={r._key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    type="time"
-                    value={toHHMM(r.start_time)}
-                    onChange={e => updateRange(r._key, { start_time: e.target.value })}
-                    style={timeInput}
+                <div key={r._key} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <TimeSelect
+                    value={r.start_time}
+                    onChange={v => updateRange(r._key, { start_time: v })}
                   />
                   <span style={{ color: T.inkMuted, fontSize: 12 }}>a</span>
-                  <input
-                    type="time"
-                    value={toHHMM(r.end_time)}
-                    onChange={e => updateRange(r._key, { end_time: e.target.value })}
-                    style={timeInput}
+                  <TimeSelect
+                    value={r.end_time}
+                    onChange={v => updateRange(r._key, { end_time: v })}
                   />
                   <button
                     onClick={() => removeRange(r._key)}

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { T, Icon, initials as nameInitials } from '../shared.jsx'
+import { T, Icon, btn, initials as nameInitials } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
 
 const textInput = {
@@ -200,12 +200,14 @@ export default function PhotoBioSection({ value, onChange, professionalId, displ
             onClick={addChip}
             disabled={disabled || !chip.trim()}
             style={{
-              padding: '8px 14px', borderRadius: 8, fontSize: 12.5, fontFamily: T.sans,
-              border: `1px solid ${T.line}`, background: T.bgSunk, color: T.inkSoft,
+              ...btn('soft'),
               cursor: disabled || !chip.trim() ? 'not-allowed' : 'pointer',
               opacity: disabled || !chip.trim() ? 0.5 : 1,
             }}
-          >Agregar</button>
+          >
+            <Icon name="plus" size={13} stroke={T.primary} />
+            Agregar
+          </button>
         </div>
         {(v.specialties?.length ?? 0) > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
