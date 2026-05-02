@@ -140,6 +140,7 @@ export const Icon = ({ name, size = 16, stroke = 'currentColor', fill = 'none' }
     chevronR: <path d="M9 6l6 6-6 6"/>,
     chevronL: <path d="M15 6l-6 6 6 6"/>,
     chevronD: <path d="M6 9l6 6 6-6"/>,
+    chevronU: <path d="M6 15l6-6 6 6"/>,
     x:        <path d="M6 6l12 12M18 6L6 18"/>,
     mail:     <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></>,
     dollar:   <path d="M12 3v18M17 7a4 4 0 0 0-4-3h-1a4 4 0 0 0 0 8h2a4 4 0 0 1 0 8h-1a4 4 0 0 1-4-3"/>,
