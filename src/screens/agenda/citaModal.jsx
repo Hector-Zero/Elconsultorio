@@ -17,10 +17,54 @@ const APPT_TYPES = [
   { value: 'online',     label: 'Online' },
 ]
 
-const DURATIONS = [30, 50, 60, 90]
+const DURATIONS = [
+  { value: 30, label: '30 min' },
+  { value: 60, label: '1 hora' },
+]
 
 // 0=Sun..6=Sat, matching Postgres / professional_schedules.day_of_week.
 const DAY_LABELS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const DOW_KEYS        = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+// 30-min granularity is the booking floor — drop the seconds. Fallback grid
+// covers the working day for off-schedule overrides.
+const FALLBACK_TIMES = (() => {
+  const out = []
+  for (let h = 6; h <= 22; h++) {
+    out.push(`${String(h).padStart(2, '0')}:00`)
+    if (h < 22) out.push(`${String(h).padStart(2, '0')}:30`)
+  }
+  return out
+})()
+
+function hhmm(t) {
+  const m = String(t ?? '').match(/^(\d{2}:\d{2})/)
+  return m ? m[1] : ''
+}
+
+// Build the dropdown options from a pro's availability ranges for a given day.
+// Returns [] when the day has no ranges — caller falls back to FALLBACK_TIMES.
+function timesFromRanges(ranges) {
+  if (!Array.isArray(ranges) || ranges.length === 0) return []
+  const slots = new Set()
+  for (const r of ranges) {
+    const s = hhmm(r.start), e = hhmm(r.end)
+    if (!s || !e) continue
+    const [sh, sm] = s.split(':').map(Number)
+    const [eh, em] = e.split(':').map(Number)
+    let mins = sh * 60 + sm
+    const endMin = eh * 60 + em
+    while (mins < endMin) {
+      const h  = Math.floor(mins / 60)
+      const mm = mins % 60
+      if (mm === 0 || mm === 30) {
+        slots.add(`${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`)
+      }
+      mins += 30
+    }
+  }
+  return Array.from(slots).sort()
+}
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -74,14 +118,15 @@ function initialState({ slot, appt }) {
       isEdit:        true,
       date:          toDateInputStr(d),
       time:          toTimeInputStr(d),
-      duration:      appt.duration ?? 50,
+      duration:      appt.duration ?? 60,
       proId:         appt.professional_id ?? '',
       sessionTypeId: appt.session_type_id ?? '',
       type:          appt.type ?? 'presencial',
       status:        appt.status ?? 'pending_payment',
       notes:         appt.notes ?? '',
+      paymentLink:   appt.payment_link ?? '',
       patientId:     appt.patient_id ?? '',
-      patientMode:   appt.patient_id ? 'existing' : 'existing',
+      patientMode:   'existing',
     }
   }
   const baseDate = slot?.date ?? new Date()
@@ -90,12 +135,13 @@ function initialState({ slot, appt }) {
     isEdit:        false,
     date:          toDateInputStr(baseDate),
     time:          `${baseHour}:00`,
-    duration:      50,
+    duration:      60,
     proId:         slot?.proId ?? '',
     sessionTypeId: '',
     type:          'presencial',
     status:        'pending_payment',
     notes:         '',
+    paymentLink:   '',
     patientId:     '',
     patientMode:   'existing',
   }
@@ -117,6 +163,7 @@ export default function CitaModal({
   const [type,          setType]          = useState(init.type)
   const [status,        setStatus]        = useState(init.status)
   const [notes,         setNotes]         = useState(init.notes)
+  const [paymentLink,   setPaymentLink]   = useState(init.paymentLink)
   const [patientMode,   setPatientMode]   = useState(init.patientMode)
   const [patientId,     setPatientId]     = useState(init.patientId)
   const [patientSearch, setPatientSearch] = useState('')
@@ -124,6 +171,10 @@ export default function CitaModal({
 
   // Inline new-patient form
   const [newPt, setNewPt] = useState({ full_name: '', rut: '', phone: '', email: '', address: '' })
+
+  // Sticky once a patient is INSERTed in this modal session, so a second
+  // Save click after a downstream failure doesn't insert another patient row.
+  const [createdPatientId, setCreatedPatientId] = useState(null)
 
   const [saving,           setSaving]           = useState(false)
   const [deleting,         setDeleting]         = useState(false)
@@ -135,6 +186,17 @@ export default function CitaModal({
   const selectedPro  = pros.find(p => p.id === proId)
   const patientById  = useMemo(() => Object.fromEntries((patients ?? []).map(p => [p.id, p])), [patients])
   const selectedPat  = patientById[patientId]
+
+  // Derive the time-picker options from the picked pro + date. Empty ranges
+  // (off-schedule day) fall through to FALLBACK_TIMES so the user has a
+  // sensible grid to pick from while the off-schedule warning intercepts save.
+  const timeOptions = useMemo(() => {
+    if (!selectedPro || !date) return FALLBACK_TIMES
+    const dow    = new Date(`${date}T00:00:00`).getDay()
+    const ranges = selectedPro?.availability?.[DOW_KEYS[dow]]
+    const opts   = timesFromRanges(ranges)
+    return opts.length ? opts : FALLBACK_TIMES
+  }, [selectedPro, date])
 
   // Filter patients for the search dropdown.
   const filteredPatients = useMemo(() => {
@@ -195,27 +257,38 @@ export default function CitaModal({
   }
 
   // ── core save ─────────────────────────────────────────────────────────────
+  // Save flow:
+  //   1. Validate; bail with inline error if anything is missing.
+  //   2. Past-date / off-schedule warnings — surface a confirm modal,
+  //      keep `saving` true so the Save button stays disabled while the
+  //      user is deciding. Cancel resets `saving`.
+  //   3. Conflict check (same pro + same datetime, excluding cancelled +
+  //      excluding self in edit).
+  //   4. Patient INSERT — only if patientMode === 'new' AND we haven't
+  //      already created one in this modal session. We sticky the new id
+  //      in `createdPatientId` so a second click after a later failure
+  //      doesn't double-insert the patient.
+  //   5. Appointment INSERT/UPDATE.
+  //   6. Hand off to onSaved (parent re-fetches the calendar window).
   async function performSave({ acknowledgePast = false, acknowledgeOffSchedule = false } = {}) {
     setErr(null)
 
     const v = basicValidate()
-    if (v) { setErr(v); return }
+    if (v) { setErr(v); setSaving(false); return }
+
+    setSaving(true)
 
     const datetimeIso = chileISO(date, time)
     const dt          = new Date(datetimeIso)
     const isPast      = dt < new Date()
 
-    // Off-schedule warning: pro doesn't normally work that day.
+    // Off-schedule check uses the pre-hydrated availability from the parent —
+    // same source of truth as the time-picker options. No extra round-trip.
     let offSchedule = false
     if (selectedPro?.id && !acknowledgeOffSchedule) {
-      const dow = dt.getDay()
-      const { data: scheds } = await supabase
-        .from('professional_schedules')
-        .select('day_of_week')
-        .eq('professional_id', selectedPro.id)
-        .eq('active', true)
-      const worksThatDay = (scheds ?? []).some(s => s.day_of_week === dow)
-      if (!worksThatDay) offSchedule = true
+      const dow    = dt.getDay()
+      const ranges = selectedPro?.availability?.[DOW_KEYS[dow]] ?? []
+      offSchedule  = ranges.length === 0
     }
 
     // Stack warnings — past first, then off-schedule, then proceed. Each
@@ -223,7 +296,7 @@ export default function CitaModal({
     if (isPast && !acknowledgePast) {
       setPendingProceed(() => () => performSave({ acknowledgePast: true, acknowledgeOffSchedule }))
       setErr({ type: 'warn-past' })
-      return
+      return // keep `saving` true so the Save button stays disabled
     }
     if (offSchedule) {
       setPendingProceed(() => () => performSave({ acknowledgePast, acknowledgeOffSchedule: true }))
@@ -231,18 +304,23 @@ export default function CitaModal({
       return
     }
 
-    setSaving(true)
+    // 3. Conflict check.
+    let conflict
+    try { conflict = await checkConflict(datetimeIso) }
+    catch (e) { setSaving(false); setErr(e.message); return }
+    if (conflict) {
+      setSaving(false)
+      setErr('Ya existe una cita en ese horario para este profesional')
+      return
+    }
 
-    try {
-      const conflict = await checkConflict(datetimeIso)
-      if (conflict) {
-        throw new Error('Ya existe una cita en ese horario para este profesional')
-      }
-
-      // Resolve patient: existing or create-new.
-      let usePatientId = patientId
-      let createdPatient = null
-      if (patientMode === 'new') {
+    // 4. Patient — reuse a sticky id if we already inserted one this session.
+    let usePatientId = patientId
+    let createdPatient = null
+    if (patientMode === 'new') {
+      if (createdPatientId) {
+        usePatientId = createdPatientId
+      } else {
         const insertPt = {
           client_id:  clientId,
           full_name:  newPt.full_name.trim(),
@@ -257,25 +335,35 @@ export default function CitaModal({
           .insert(insertPt)
           .select('id, full_name, phone, email, rut, address')
           .single()
-        if (pErr) throw new Error(`No se pudo crear paciente: ${pErr.message}`)
+        if (pErr) {
+          setSaving(false)
+          setErr(`No se pudo crear paciente: ${pErr.message}`)
+          return
+        }
         usePatientId   = pt.id
         createdPatient = pt
+        setCreatedPatientId(pt.id) // sticky — survives later failures
       }
+    }
 
-      const appointmentRow = {
-        client_id:       clientId,
-        patient_id:      usePatientId || null,
-        professional_id: proId || null,
-        datetime:        datetimeIso,
-        duration:        Number(duration) || 50,
-        session_type_id: sessionTypeId || null,
-        type,
-        // status: only writable in edit mode; on create the spec says default to pending_payment.
-        status:          isEdit ? status : 'pending_payment',
-        notes:           notes?.trim() || null,
-      }
+    // 5. Appointment.
+    const appointmentRow = {
+      client_id:       clientId,
+      patient_id:      usePatientId || null,
+      professional_id: proId || null,
+      datetime:        datetimeIso,
+      duration:        Number(duration) || 60,
+      session_type_id: sessionTypeId || null,
+      type,
+      // Status is only writable in edit mode; on create, force pending_payment.
+      status:          isEdit ? status : 'pending_payment',
+      notes:           notes?.trim() || null,
+      // payment_link is only exposed in edit mode (UI hides the input on create).
+      payment_link:    isEdit ? (paymentLink?.trim() || null) : null,
+    }
 
-      let saved
+    let saved
+    try {
       if (isEdit) {
         const { data, error } = await supabase
           .from('appointments')
@@ -283,7 +371,7 @@ export default function CitaModal({
           .eq('id', appt.id)
           .select(SAVED_SELECT)
           .single()
-        if (error) throw new Error(`No se pudo guardar: ${error.message}`)
+        if (error) throw error
         saved = data
       } else {
         const { data, error } = await supabase
@@ -291,16 +379,17 @@ export default function CitaModal({
           .insert(appointmentRow)
           .select(SAVED_SELECT)
           .single()
-        if (error) throw new Error(`No se pudo crear: ${error.message}`)
+        if (error) throw error
         saved = data
       }
-
-      setSaving(false)
-      onSaved?.(saved, { createdPatient })
     } catch (e) {
       setSaving(false)
-      setErr(e.message || 'Error al guardar')
+      setErr(`No se pudo ${isEdit ? 'guardar' : 'crear'} la cita: ${e.message}`)
+      return
     }
+
+    setSaving(false)
+    onSaved?.(saved, { createdPatient })
   }
 
   async function performDelete() {
@@ -476,25 +565,37 @@ export default function CitaModal({
             </div>
 
             {/* Date / time / duration */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 110px', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px', gap: 10 }}>
               <div>
                 <Label>Fecha *</Label>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
               </div>
               <div>
                 <Label>Hora *</Label>
-                <input type="time" value={time} onChange={e => setTime(e.target.value)} style={monoInput} />
+                <select
+                  value={time}
+                  onChange={e => setTime(e.target.value)}
+                  style={monoInput}
+                >
+                  {/* Always include the current value, even if it falls outside
+                      the pro's schedule grid — otherwise editing a legacy row
+                      would silently snap to a different time on first render. */}
+                  {!timeOptions.includes(time) && time && (
+                    <option value={time}>{time}</option>
+                  )}
+                  {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div>
                 <Label>Duración</Label>
                 <select value={duration} onChange={e => setDuration(+e.target.value)} style={inputStyle}>
-                  {DURATIONS.map(d => <option key={d} value={d}>{d} min</option>)}
+                  {DURATIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                 </select>
               </div>
             </div>
 
-            {/* Type + status */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {/* Modalidad + (edit only) Estado */}
+            <div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr 1fr' : '1fr', gap: 10 }}>
               <div>
                 <Label>Modalidad</Label>
                 <div style={{
@@ -510,19 +611,28 @@ export default function CitaModal({
                   ))}
                 </div>
               </div>
-              <div>
-                <Label>Estado</Label>
-                <select
-                  value={status}
-                  onChange={e => setStatus(e.target.value)}
-                  disabled={!isEdit}
-                  title={!isEdit ? 'El estado solo se puede cambiar al editar una cita existente' : ''}
-                  style={{ ...inputStyle, opacity: isEdit ? 1 : 0.6, cursor: isEdit ? 'pointer' : 'not-allowed' }}
-                >
-                  {APPT_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
+              {isEdit && (
+                <div>
+                  <Label>Estado</Label>
+                  <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
+                    {APPT_STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {/* payment_link — edit-mode only */}
+            {isEdit && (
+              <div>
+                <Label>Link de pago</Label>
+                <input
+                  value={paymentLink}
+                  onChange={e => setPaymentLink(e.target.value)}
+                  placeholder="https://www.flow.cl/btn.php?token=…"
+                  style={monoInput}
+                />
+              </div>
+            )}
 
             {/* Notes */}
             <div>
@@ -581,7 +691,7 @@ export default function CitaModal({
           description="Estás creando o editando una cita en el pasado. ¿Continuar de todos modos? Útil para registrar sesiones realizadas."
           confirmLabel="Sí, continuar"
           variant="default"
-          onCancel={() => { setErr(null); setPendingProceed(null) }}
+          onCancel={() => { setErr(null); setPendingProceed(null); setSaving(false) }}
           onConfirm={() => { const fn = pendingProceed; setErr(null); setPendingProceed(null); fn() }}
         />
       )}
@@ -592,7 +702,7 @@ export default function CitaModal({
           description={`Este profesional no atiende los ${err.day}. ¿Crear la cita igualmente?`}
           confirmLabel="Sí, agendar"
           variant="default"
-          onCancel={() => { setErr(null); setPendingProceed(null) }}
+          onCancel={() => { setErr(null); setPendingProceed(null); setSaving(false) }}
           onConfirm={() => { const fn = pendingProceed; setErr(null); setPendingProceed(null); fn() }}
         />
       )}

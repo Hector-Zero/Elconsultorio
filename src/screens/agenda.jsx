@@ -10,6 +10,18 @@ import CitaModal, { APPT_STATUS } from './agenda/citaModal.jsx'
 // shape from citaModal so both screens stay in sync.
 const STATUS_LABELS = Object.fromEntries(APPT_STATUS.map(s => [s.value, s.label]))
 
+// Single source of truth for the appointment row select — keeps the
+// initial fetch, realtime refresh, and post-save refresh on the same
+// joined shape (LEFT joins by default per PostgREST, so missing
+// patients / session_types / leads do not hide the row).
+const APPT_SELECT = `
+  id, lead_id, patient_id, professional_id, datetime, duration, status, notes,
+  type, session_type_id, payment_link,
+  patients(id, full_name, phone, email, rut),
+  session_types(id, name, price_amount, price_currency),
+  leads(id, name, phone, chat_id, conversation_context)
+`.replace(/\s+/g, ' ').trim()
+
 const DOW_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 // Postgres day_of_week → JS-style dowKey used in this screen ('monday', etc).
@@ -260,24 +272,40 @@ export default function AgendaScreen({ onNavigate }) {
   }, [])
 
 
-  // Fetch appointments + leads (filtered by client_id via RLS)
+  // Toast for transient confirmations after a save.
+  const [toast, setToast] = useState(null)
+  function flashToast(t, ms = 2500) {
+    setToast(t)
+    setTimeout(() => setToast(null), ms)
+  }
+
+  // Re-fetchable view of the visible window, so the modal can drive a
+  // refresh after a successful save without each path re-implementing the
+  // query. Stays in sync with the rangeStart/rangeEnd/clientId/isPro deps.
+  async function refreshAppts() {
+    if (!clientId) return
+    let q = supabase
+      .from('appointments')
+      .select(APPT_SELECT)
+      .gte('datetime', rangeStart.toISOString())
+      .lt('datetime',  rangeEnd.toISOString())
+      .order('datetime', { ascending: true })
+    if (isPro) q = q.eq('professional_id', professional.id)
+    const { data, error: e } = await q
+    if (e) { setError(e.message); return }
+    setAppts(data ?? [])
+  }
+
+  // Fetch appointments (filtered by client_id via RLS) + catalog data
   useEffect(() => {
     if (!clientId) return
     let alive = true
     setLoading(true)
 
-    const apptSelect = `
-      id, lead_id, patient_id, professional_id, datetime, duration, status, notes,
-      type, session_type_id, payment_link,
-      patients(id, full_name, phone, email, rut),
-      session_types(id, name, price_amount, price_currency),
-      leads(id, name, phone, chat_id, conversation_context)
-    `.replace(/\s+/g, ' ').trim()
-
     const apptQuery = () => {
       let q = supabase
         .from('appointments')
-        .select(apptSelect)
+        .select(APPT_SELECT)
         .gte('datetime', rangeStart.toISOString())
         .lt('datetime',  rangeEnd.toISOString())
         .order('datetime', { ascending: true })
@@ -544,24 +572,34 @@ export default function AgendaScreen({ onNavigate }) {
           clientId={clientId}
           onClose={() => setModal(null)}
           onSaved={(saved, meta) => {
-            // Optimistic update — realtime subscription will reconcile soon after.
-            setAppts(prev => {
-              const idx = prev.findIndex(a => a.id === saved.id)
-              if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next }
-              return [...prev, saved]
-            })
-            // If a new patient was created in the modal, fold it into the
-            // catalog so the next "Buscar paciente" prompt picks it up.
+            const wasEdit = !!modal.appt
+            setModal(null)
+            // Fold a freshly-created patient into the catalog so the next
+            // "Buscar paciente" prompt finds them immediately.
             if (meta?.createdPatient) {
               setPatientsCatalog(prev => prev.some(p => p.id === meta.createdPatient.id) ? prev : [...prev, meta.createdPatient])
             }
-            setModal(null)
+            // Authoritative refresh — replaces the optimistic update so
+            // edge cases (out-of-range datetime, joined columns mid-flight)
+            // can't leave the grid empty while the count is non-zero.
+            refreshAppts()
+            flashToast({ kind: 'ok', msg: wasEdit ? '✓ Cita actualizada' : '✓ Cita creada' })
           }}
-          onDeleted={(id) => {
-            setAppts(prev => prev.filter(a => a.id !== id))
+          onDeleted={() => {
             setModal(null)
+            refreshAppts()
+            flashToast({ kind: 'ok', msg: '✓ Cita eliminada' })
           }}
         />
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          padding: '10px 18px', borderRadius: 8, fontSize: 13, zIndex: 80,
+          background: toast.kind === 'err' ? T.danger : T.primary, color: '#fff',
+          boxShadow: '0 8px 24px rgba(20,18,14,0.25)',
+        }}>{toast.msg}</div>
       )}
     </div>
   )
