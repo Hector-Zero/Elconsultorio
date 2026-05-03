@@ -359,6 +359,60 @@ export default function CitaModal({
       }
     }
 
+    // 4b. Ensure an active patient_assignments row exists for this
+    // (patient, professional) pair — only on create. Edit mode never
+    // touches assignments. We *don't* abort on failure: the
+    // appointment insert proceeds and we surface a softer warning in
+    // the success toast so the admin can fix it manually if needed.
+    // Pattern matches patients.jsx's lead-derived auto-assignment
+    // insert: { patient_id, professional_id, client_id, status:'active',
+    // admin_can_view_notes:true }.
+    let assignmentFailed = false
+    if (!isEdit && usePatientId && proId) {
+      try {
+        if (patientMode === 'new') {
+          // Brand-new patient → no prior assignment can exist.
+          const { error: aErr } = await supabase
+            .from('patient_assignments')
+            .insert({
+              patient_id:           usePatientId,
+              professional_id:      proId,
+              client_id:            clientId,
+              status:               'active',
+              admin_can_view_notes: true,
+            })
+          if (aErr) throw aErr
+        } else {
+          // Existing patient → only insert if no active assignment for
+          // this (patient, professional) pair already exists.
+          const { count, error: chkErr } = await supabase
+            .from('patient_assignments')
+            .select('id', { count: 'exact', head: true })
+            .eq('client_id',       clientId)
+            .eq('patient_id',      usePatientId)
+            .eq('professional_id', proId)
+            .eq('status',          'active')
+          if (chkErr) throw chkErr
+          if ((count ?? 0) === 0) {
+            const { error: aErr } = await supabase
+              .from('patient_assignments')
+              .insert({
+                patient_id:           usePatientId,
+                professional_id:      proId,
+                client_id:            clientId,
+                status:               'active',
+                admin_can_view_notes: true,
+              })
+            if (aErr) throw aErr
+          }
+        }
+      } catch (e) {
+        assignmentFailed = true
+        // eslint-disable-next-line no-console
+        console.warn('[citaModal] No se pudo crear/verificar patient_assignments — la cita se guardará igualmente.', e)
+      }
+    }
+
     // 5. Appointment.
     const appointmentRow = {
       client_id:       clientId,
@@ -402,7 +456,7 @@ export default function CitaModal({
     }
 
     setSaving(false)
-    onSaved?.(saved, { createdPatient })
+    onSaved?.(saved, { createdPatient, assignmentFailed })
   }
 
   async function performDelete() {

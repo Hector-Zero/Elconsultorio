@@ -572,7 +572,14 @@ export default function AgendaScreen({ onNavigate }) {
             // edge cases (out-of-range datetime, joined columns mid-flight)
             // can't leave the grid empty while the count is non-zero.
             refreshAppts()
-            flashToast({ kind: 'ok', msg: wasEdit ? '✓ Cita actualizada' : '✓ Cita creada' })
+            // Toast degrades when the patient_assignments insert silently
+            // failed (we still saved the appointment, but the pro's patient
+            // list won't include this patient until the link is fixed).
+            const baseMsg = wasEdit ? '✓ Cita actualizada' : '✓ Cita creada'
+            const msg = meta?.assignmentFailed
+              ? `${baseMsg}, pero asignación de paciente falló`
+              : baseMsg
+            flashToast({ kind: meta?.assignmentFailed ? 'err' : 'ok', msg }, meta?.assignmentFailed ? 4500 : 2500)
           }}
           onDeleted={() => {
             setModal(null)
