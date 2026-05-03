@@ -581,9 +581,9 @@ export default function AgendaScreen({ onNavigate }) {
           }}
           onViewPatient={(patientId) => {
             setModal(null)
-            // Hash route convention shared with App.jsx — `#patients/<id>`
-            // selects that patient on load.
-            onNavigate?.('patients/' + patientId)
+            // Lands on the ficha clínica (files.jsx) for that specific
+            // patient. files.jsx interprets the param as a patient.id.
+            onNavigate?.('files/' + patientId)
           }}
         />
       )}

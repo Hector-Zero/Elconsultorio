@@ -41,27 +41,49 @@ export default function FilesScreen({ onNavigate, param }) {
     setLoading(true); setError(null)
 
     async function load() {
-      let leadId = param
+      // `param` is now a patient.id (UUID). Reject the literal 'null' /
+      // 'undefined' strings that can leak through when a caller passes
+      // `'files/' + p.lead_id` for a manually-created patient whose
+      // lead_id is null — the prior version forwarded that to .eq() and
+      // Postgres tried to cast 'null' to uuid, surfacing as
+      // "invalid input syntax for type uuid: null".
+      const patientId = (param && param !== 'null' && param !== 'undefined') ? param : null
 
-      // Fall back: first qualified lead with a patient row
-      if (!leadId) {
-        const { data: pr } = await supabase
-          .from('patients').select('lead_id').eq('client_id', clientId).limit(1).maybeSingle()
-        leadId = pr?.lead_id
+      let pat = null
+      if (patientId) {
+        const { data, error: pErr } = await supabase
+          .from('patients').select('*')
+          .eq('client_id', clientId).eq('id', patientId).maybeSingle()
+        if (pErr) { setError(pErr.message); setLoading(false); return }
+        if (!alive) return
+        pat = data
+      } else {
+        // Fall back: first patient for this client (preserves prior behavior
+        // of "open the ficha screen with no param" landing on a sensible default).
+        const { data } = await supabase
+          .from('patients').select('*').eq('client_id', clientId)
+          .order('created_at', { ascending: true }).limit(1).maybeSingle()
+        if (!alive) return
+        pat = data
       }
-      if (!leadId) { setError('No hay paciente seleccionado.'); setLoading(false); return }
-
-      const { data: pat, error: pErr } = await supabase
-        .from('patients').select('*')
-        .eq('client_id', clientId).eq('lead_id', leadId).maybeSingle()
-      if (pErr) { setError(pErr.message); setLoading(false); return }
-      if (!alive) return
+      if (!pat) {
+        setError('Paciente no encontrado. Selecciona un paciente desde la lista de Pacientes.')
+        setLoading(false)
+        return
+      }
       setPatient(pat)
 
-      const { data: ap } = await supabase
-        .from('appointments').select('id, datetime, duration, status')
-        .eq('client_id', clientId).eq('lead_id', leadId)
+      // Appointments — match by patient_id (the new schema). Legacy rows
+      // that only have lead_id are pulled in too when the patient still
+      // carries a lead_id, via an OR clause.
+      let apptQ = supabase
+        .from('appointments').select('id, datetime, duration, status, lead_id, patient_id')
+        .eq('client_id', clientId)
         .order('datetime', { ascending: true })
+      apptQ = pat.lead_id
+        ? apptQ.or(`patient_id.eq.${pat.id},lead_id.eq.${pat.lead_id}`)
+        : apptQ.eq('patient_id', pat.id)
+      const { data: ap } = await apptQ
       if (!alive) return
       const all = ap ?? []
       setApptCount(all.filter(a => a.status === 'confirmed' || a.status === 'completed').length)

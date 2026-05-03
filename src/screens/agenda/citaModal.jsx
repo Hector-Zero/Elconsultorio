@@ -241,11 +241,16 @@ export default function CitaModal({
 
   // ── validation ────────────────────────────────────────────────────────────
   function basicValidate() {
-    if (patientMode === 'existing' && !patientId)              return 'Selecciona un paciente'
-    if (patientMode === 'new'      && !newPt.full_name.trim()) return 'Ingresa el nombre del nuevo paciente'
-    if (!date)                                                  return 'Fecha requerida'
-    if (!time)                                                  return 'Hora requerida'
-    if (pros?.length > 0 && !proId)                             return 'Selecciona un profesional'
+    // In edit mode the patient picker is hidden (read-only display) — the
+    // patient_id stays whatever the row already has, including null for
+    // legacy lead-only appointments.
+    if (!isEdit) {
+      if (patientMode === 'existing' && !patientId)              return 'Selecciona un paciente'
+      if (patientMode === 'new'      && !newPt.full_name.trim()) return 'Ingresa el nombre del nuevo paciente'
+    }
+    if (!date)                                                    return 'Fecha requerida'
+    if (!time)                                                    return 'Hora requerida'
+    if (pros?.length > 0 && !proId)                               return 'Selecciona un profesional'
     return null
   }
 
@@ -430,125 +435,168 @@ export default function CitaModal({
           {/* Header */}
           <div style={{
             padding: '18px 22px 14px', borderBottom: `1px solid ${T.lineSoft}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
           }}>
             <div style={{ fontFamily: T.serif, fontSize: 22, color: T.ink, lineHeight: 1 }}>
               {isEdit ? 'Editar cita' : 'Nueva cita'}
             </div>
-            <button
-              onClick={safeClose}
-              disabled={saving || deleting}
-              aria-label="Cerrar"
-              style={{
-                background: 'transparent', border: 'none', cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
-                color: T.inkMuted, fontSize: 22, lineHeight: 1, padding: 4,
-              }}
-            >×</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {isEdit && appt?.patient_id && onViewPatient && (
+                <button
+                  onClick={() => { onViewPatient(appt.patient_id) }}
+                  disabled={saving || deleting}
+                  aria-label="Ver ficha del paciente"
+                  title="Ver ficha del paciente"
+                  style={{
+                    width: 30, height: 30, display: 'grid', placeItems: 'center',
+                    background: 'transparent', border: 'none',
+                    cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
+                    color: T.inkMuted, padding: 0, borderRadius: 6,
+                  }}
+                ><Icon name="file" size={16} stroke={T.inkMuted} /></button>
+              )}
+              <button
+                onClick={safeClose}
+                disabled={saving || deleting}
+                aria-label="Cerrar"
+                style={{
+                  background: 'transparent', border: 'none', cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
+                  color: T.inkMuted, fontSize: 22, lineHeight: 1, padding: 4,
+                }}
+              >×</button>
+            </div>
           </div>
 
           {/* Body */}
           <div style={{ flex: 1, overflow: 'auto', padding: '18px 22px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-            {/* Patient picker */}
-            <div>
-              <Label>Paciente *</Label>
-              <div style={{
-                display: 'flex', gap: 6, marginBottom: 8,
-                background: T.bgSunk, borderRadius: 8, padding: 2, border: `1px solid ${T.line}`,
-              }}>
-                {[['existing', 'Buscar paciente'], ['new', '+ Crear nuevo']].map(([k, label]) => (
-                  <button key={k} type="button" onClick={() => setPatientMode(k)} style={{
-                    flex: 1, border: 'none', background: patientMode === k ? T.bgRaised : 'transparent',
-                    color: patientMode === k ? T.ink : T.inkMuted,
-                    padding: '7px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                  }}>{label}</button>
-                ))}
-              </div>
-
-              {patientMode === 'existing' ? (
-                <div ref={searchRef} style={{ position: 'relative' }}>
-                  <input
-                    value={patientSearch || (selectedPat?.full_name ?? '')}
-                    onChange={e => { setPatientSearch(e.target.value); setSearchOpen(true); if (selectedPat) setPatientId('') }}
-                    onFocus={() => setSearchOpen(true)}
-                    placeholder="Buscar por nombre, RUT o email…"
-                    style={inputStyle}
-                  />
-                  {selectedPat && !searchOpen && (
-                    <button
-                      onClick={clearPatient}
-                      title="Cambiar paciente"
-                      style={{
-                        position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                        background: 'transparent', border: 'none', cursor: 'pointer',
-                        color: T.inkMuted, padding: 6,
-                      }}
-                    ><Icon name="x" size={13} stroke={T.inkMuted} /></button>
-                  )}
-                  {searchOpen && (
-                    <div style={{
-                      position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-                      background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 8,
-                      boxShadow: '0 8px 24px rgba(20,18,14,0.16)', maxHeight: 240, overflow: 'auto', zIndex: 10,
-                    }}>
-                      {filteredPatients.length === 0 ? (
-                        <div style={{ padding: '10px 12px', fontSize: 12.5, color: T.inkMuted, fontStyle: 'italic' }}>
-                          Sin resultados. Cambia a "Crear nuevo" para agregar.
-                        </div>
-                      ) : filteredPatients.map(p => (
-                        <div
-                          key={p.id}
-                          onClick={() => pickPatient(p)}
-                          style={{
-                            padding: '8px 12px', fontSize: 12.5, cursor: 'pointer',
-                            borderBottom: `1px solid ${T.lineSoft}`,
-                            background: p.id === patientId ? T.bgSunk : 'transparent',
-                          }}
-                        >
-                          <div style={{ color: T.ink, fontWeight: 500 }}>{p.full_name}</div>
-                          <div style={{ fontSize: 11, color: T.inkMuted, marginTop: 2 }}>
-                            {[p.rut, p.email, p.phone].filter(Boolean).join(' · ') || '—'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{
-                  padding: 12, borderRadius: 8, background: T.bgSunk, border: `1px solid ${T.line}`,
-                  display: 'flex', flexDirection: 'column', gap: 10,
-                }}>
+            {/* Patient — editable picker on create, read-only display on edit. */}
+            {isEdit ? (
+              (() => {
+                // Prefer the joined patients row from the appointment payload;
+                // fall back to the catalog if the join was empty.
+                const ptInfo = appt?.patients ?? selectedPat ?? null
+                const meta   = ptInfo
+                  ? [ptInfo.rut, ptInfo.email, ptInfo.phone].filter(Boolean).join(' · ')
+                  : ''
+                return (
                   <div>
-                    <Label>Nombre completo *</Label>
+                    <Label>Paciente</Label>
+                    <div style={{
+                      padding: '10px 12px', borderRadius: 8,
+                      background: T.bgSunk, border: `1px solid ${T.line}`,
+                    }}>
+                      <div style={{ fontSize: 14, color: T.ink, fontWeight: 500 }}>
+                        {ptInfo?.full_name ?? '— sin paciente —'}
+                      </div>
+                      {meta && (
+                        <div style={{ fontSize: 11.5, color: T.inkMuted, marginTop: 3 }}>{meta}</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()
+            ) : (
+              <div>
+                <Label>Paciente *</Label>
+                <div style={{
+                  display: 'flex', gap: 6, marginBottom: 8,
+                  background: T.bgSunk, borderRadius: 8, padding: 2, border: `1px solid ${T.line}`,
+                }}>
+                  {[['existing', 'Buscar paciente'], ['new', '+ Crear nuevo']].map(([k, label]) => (
+                    <button key={k} type="button" onClick={() => setPatientMode(k)} style={{
+                      flex: 1, border: 'none', background: patientMode === k ? T.bgRaised : 'transparent',
+                      color: patientMode === k ? T.ink : T.inkMuted,
+                      padding: '7px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    }}>{label}</button>
+                  ))}
+                </div>
+
+                {patientMode === 'existing' ? (
+                  <div ref={searchRef} style={{ position: 'relative' }}>
                     <input
-                      value={newPt.full_name}
-                      onChange={e => setNewPt(p => ({ ...p, full_name: e.target.value }))}
-                      placeholder="Ej: María Pérez"
+                      value={patientSearch || (selectedPat?.full_name ?? '')}
+                      onChange={e => { setPatientSearch(e.target.value); setSearchOpen(true); if (selectedPat) setPatientId('') }}
+                      onFocus={() => setSearchOpen(true)}
+                      placeholder="Buscar por nombre, RUT o email…"
                       style={inputStyle}
                     />
+                    {selectedPat && !searchOpen && (
+                      <button
+                        onClick={clearPatient}
+                        title="Cambiar paciente"
+                        style={{
+                          position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                          background: 'transparent', border: 'none', cursor: 'pointer',
+                          color: T.inkMuted, padding: 6,
+                        }}
+                      ><Icon name="x" size={13} stroke={T.inkMuted} /></button>
+                    )}
+                    {searchOpen && (
+                      <div style={{
+                        position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                        background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 8,
+                        boxShadow: '0 8px 24px rgba(20,18,14,0.16)', maxHeight: 240, overflow: 'auto', zIndex: 10,
+                      }}>
+                        {filteredPatients.length === 0 ? (
+                          <div style={{ padding: '10px 12px', fontSize: 12.5, color: T.inkMuted, fontStyle: 'italic' }}>
+                            Sin resultados. Cambia a "Crear nuevo" para agregar.
+                          </div>
+                        ) : filteredPatients.map(p => (
+                          <div
+                            key={p.id}
+                            onClick={() => pickPatient(p)}
+                            style={{
+                              padding: '8px 12px', fontSize: 12.5, cursor: 'pointer',
+                              borderBottom: `1px solid ${T.lineSoft}`,
+                              background: p.id === patientId ? T.bgSunk : 'transparent',
+                            }}
+                          >
+                            <div style={{ color: T.ink, fontWeight: 500 }}>{p.full_name}</div>
+                            <div style={{ fontSize: 11, color: T.inkMuted, marginTop: 2 }}>
+                              {[p.rut, p.email, p.phone].filter(Boolean).join(' · ') || '—'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                ) : (
+                  <div style={{
+                    padding: 12, borderRadius: 8, background: T.bgSunk, border: `1px solid ${T.line}`,
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                  }}>
                     <div>
-                      <Label>RUT</Label>
-                      <input value={newPt.rut} onChange={e => setNewPt(p => ({ ...p, rut: e.target.value }))} placeholder="12.345.678-9" style={monoInput} />
+                      <Label>Nombre completo *</Label>
+                      <input
+                        value={newPt.full_name}
+                        onChange={e => setNewPt(p => ({ ...p, full_name: e.target.value }))}
+                        placeholder="Ej: María Pérez"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <Label>RUT</Label>
+                        <input value={newPt.rut} onChange={e => setNewPt(p => ({ ...p, rut: e.target.value }))} placeholder="12.345.678-9" style={monoInput} />
+                      </div>
+                      <div>
+                        <Label>Teléfono</Label>
+                        <input value={newPt.phone} onChange={e => setNewPt(p => ({ ...p, phone: e.target.value }))} placeholder="+56 9 …" style={monoInput} />
+                      </div>
                     </div>
                     <div>
-                      <Label>Teléfono</Label>
-                      <input value={newPt.phone} onChange={e => setNewPt(p => ({ ...p, phone: e.target.value }))} placeholder="+56 9 …" style={monoInput} />
+                      <Label>Email</Label>
+                      <input type="email" value={newPt.email} onChange={e => setNewPt(p => ({ ...p, email: e.target.value }))} placeholder="correo@ejemplo.cl" style={inputStyle} />
+                    </div>
+                    <div>
+                      <Label>Dirección</Label>
+                      <input value={newPt.address} onChange={e => setNewPt(p => ({ ...p, address: e.target.value }))} placeholder="Av. … 1234, Comuna" style={inputStyle} />
                     </div>
                   </div>
-                  <div>
-                    <Label>Email</Label>
-                    <input type="email" value={newPt.email} onChange={e => setNewPt(p => ({ ...p, email: e.target.value }))} placeholder="correo@ejemplo.cl" style={inputStyle} />
-                  </div>
-                  <div>
-                    <Label>Dirección</Label>
-                    <input value={newPt.address} onChange={e => setNewPt(p => ({ ...p, address: e.target.value }))} placeholder="Av. … 1234, Comuna" style={inputStyle} />
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Professional + session type */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -669,27 +717,21 @@ export default function CitaModal({
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
             {isEdit ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  onClick={() => setConfirmDel(true)}
-                  disabled={saving || deleting}
-                  style={{
-                    ...btn('ghost'),
-                    color: T.danger, borderColor: T.danger,
-                    cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
-                  }}
-                >Eliminar</button>
-                {appt?.patient_id && onViewPatient && (
-                  <button
-                    onClick={() => { onViewPatient(appt.patient_id); }}
-                    disabled={saving || deleting}
-                    style={btn('soft')}
-                  >Ver ficha del paciente</button>
-                )}
-              </div>
+              <button
+                onClick={() => setConfirmDel(true)}
+                disabled={saving || deleting}
+                style={{
+                  ...btn('ghost'),
+                  color: T.danger, borderColor: T.danger,
+                  cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
+                }}
+              >Eliminar</button>
             ) : <div />}
             <div style={{ flex: 1 }} />
-            <button onClick={safeClose} style={btn('ghost')} disabled={saving || deleting}>Cancelar</button>
+            {/* Cancelar is only in create mode — edit mode closes via × or backdrop. */}
+            {!isEdit && (
+              <button onClick={safeClose} style={btn('ghost')} disabled={saving || deleting}>Cancelar</button>
+            )}
             <button
               onClick={() => performSave()}
               style={btn('primary')}

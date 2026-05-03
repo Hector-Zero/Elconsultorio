@@ -509,7 +509,7 @@ function PatientQuickPanel({ p, onNavigate, updatePatient }) {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 16 }}>
-          <button style={btn('soft')} onClick={() => onNavigate?.('files/' + p.lead_id)}><Icon name="file" size={13} stroke={T.primary} /> Ver ficha</button>
+          <button style={btn('soft')} onClick={() => onNavigate?.('files/' + p.id)}><Icon name="file" size={13} stroke={T.primary} /> Ver ficha</button>
           <button style={btn('soft')} onClick={() => onNavigate?.('calendar')}><Icon name="calendar" size={13} stroke={T.primary} /> Agendar</button>
           <button style={btn('soft')} onClick={() => onNavigate?.('billing/' + p.lead_id)}><Icon name="card" size={13} stroke={T.primary} /> Cobrar</button>
         </div>
