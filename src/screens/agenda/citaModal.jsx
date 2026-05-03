@@ -90,17 +90,25 @@ function toTimeInputStr(d) {
 }
 
 const TZ = 'America/Santiago'
-function chileOffsetMin(at = new Date()) {
-  const local = new Date(at.toLocaleString('en-US', { timeZone: TZ }))
-  return Math.round((local.getTime() - at.getTime()) / 60000)
-}
+
+// Treat (dateStr, timeStr) as Santiago wall-clock and return the corresponding
+// UTC ISO string. Santiago is UTC-4 year-round per project policy (no DST
+// observed); appending the literal "-04:00" lets the JS Date parser produce
+// the correct instant directly.
+//
+// PRIOR BUG: an Intl-based offset computation that round-tripped through
+// `toLocaleString` returned 0 minutes when the browser's local timezone
+// happened to be Santiago, so a 09:00 pick was stored as 09:00 UTC instead
+// of 13:00 UTC. Hardcoding the offset removes that dependency on the
+// browser's TZ.
 function chileISO(dateStr, timeStr) {
-  const [y, mo, d] = dateStr.split('-').map(Number)
-  const [h, mi]    = timeStr.split(':').map(Number)
-  const guess = new Date(Date.UTC(y, mo - 1, d, h, mi))
-  const off   = chileOffsetMin(guess)
-  return new Date(guess.getTime() - off * 60000).toISOString()
+  return new Date(`${dateStr}T${timeStr}:00-04:00`).toISOString()
 }
+
+// Render-side helper: convert a stored UTC ISO into a JS Date whose
+// .getHours()/.getDate() reflect Santiago wall-clock. Browser-TZ-independent
+// because the second `new Date(...)` parses a string whose numeric components
+// are the Santiago wall-clock — getHours() then echoes those numbers.
 function toChileDate(iso) {
   return new Date(new Date(iso).toLocaleString('en-US', { timeZone: TZ }))
 }
@@ -151,7 +159,7 @@ function initialState({ slot, appt }) {
 
 export default function CitaModal({
   slot, appt, pros, patients, sessionTypes, clientId,
-  onClose, onSaved, onDeleted,
+  onClose, onSaved, onDeleted, onViewPatient,
 }) {
   const init = useMemo(() => initialState({ slot, appt }), [slot?.date, slot?.hour, appt?.id])
 
@@ -661,15 +669,24 @@ export default function CitaModal({
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
             {isEdit ? (
-              <button
-                onClick={() => setConfirmDel(true)}
-                disabled={saving || deleting}
-                style={{
-                  ...btn('ghost'),
-                  color: T.danger, borderColor: T.danger,
-                  cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
-                }}
-              >Eliminar</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => setConfirmDel(true)}
+                  disabled={saving || deleting}
+                  style={{
+                    ...btn('ghost'),
+                    color: T.danger, borderColor: T.danger,
+                    cursor: (saving || deleting) ? 'not-allowed' : 'pointer',
+                  }}
+                >Eliminar</button>
+                {appt?.patient_id && onViewPatient && (
+                  <button
+                    onClick={() => { onViewPatient(appt.patient_id); }}
+                    disabled={saving || deleting}
+                    style={btn('soft')}
+                  >Ver ficha del paciente</button>
+                )}
+              </div>
             ) : <div />}
             <div style={{ flex: 1 }} />
             <button onClick={safeClose} style={btn('ghost')} disabled={saving || deleting}>Cancelar</button>

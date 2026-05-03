@@ -96,22 +96,11 @@ function toDateInput(d) {
 // ── Chile timezone helpers ────────────────────────────────────────────
 const TZ = 'America/Santiago'
 
-// Returns a Date whose .getHours()/.getDate() reflect Santiago wall-clock time
+// Returns a Date whose .getHours()/.getDate() reflect Santiago wall-clock time.
+// The save-side ISO conversion lives in citaModal.jsx (chileISO) — this file
+// is read-only with respect to datetimes.
 function nowChile() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: TZ }))
-}
-// Santiago UTC offset (minutes) at a given instant — handles DST
-function chileOffsetMin(at = new Date()) {
-  const local = new Date(at.toLocaleString('en-US', { timeZone: TZ }))
-  return Math.round((local.getTime() - at.getTime()) / 60000)
-}
-// Build a UTC ISO string from a date+time entered as Chile wall-clock
-function chileISO(dateStr, timeStr) {
-  const [y, mo, d] = dateStr.split('-').map(Number)
-  const [h, mi]    = timeStr.split(':').map(Number)
-  const guess = new Date(Date.UTC(y, mo - 1, d, h, mi))
-  const off   = chileOffsetMin(guess)
-  return new Date(guess.getTime() - off * 60000).toISOString()
 }
 
 // ── Status style ──────────────────────────────────────────────────────
@@ -589,6 +578,12 @@ export default function AgendaScreen({ onNavigate }) {
             setModal(null)
             refreshAppts()
             flashToast({ kind: 'ok', msg: '✓ Cita eliminada' })
+          }}
+          onViewPatient={(patientId) => {
+            setModal(null)
+            // Hash route convention shared with App.jsx — `#patients/<id>`
+            // selects that patient on load.
+            onNavigate?.('patients/' + patientId)
           }}
         />
       )}

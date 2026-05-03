@@ -20,7 +20,7 @@ const todayISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 
-export default function PatientsScreen({ onNavigate }) {
+export default function PatientsScreen({ onNavigate, param }) {
   const { clientId, professional } = useContext(ClientCtx)
   const isPro = !!professional
   const [selectedId, setSelectedId] = useState(null)
@@ -122,12 +122,23 @@ export default function PatientsScreen({ onNavigate }) {
       setLeads(ls)
       setPatients(pts)
       setAppts(ap)
-      setSelectedId(prev => prev ?? pts[0]?.id ?? null)
+      // Honor a deep-link from another screen (e.g. agenda → "Ver ficha del
+      // paciente" → #patients/<id>). Falls back to the previous selection,
+      // then to the first patient.
+      const wanted = param && pts.some(p => p.id === param) ? param : null
+      setSelectedId(prev => wanted ?? prev ?? pts[0]?.id ?? null)
       setLoading(false)
     })
 
     return () => { alive = false }
   }, [clientId, isPro, professional?.id])
+
+  // If `param` changes after the initial load (e.g. user clicks Ver ficha
+  // for a different patient while already on this screen), re-select.
+  useEffect(() => {
+    if (!param) return
+    if (patients.some(p => p.id === param)) setSelectedId(param)
+  }, [param, patients])
 
   const apptsByLead = useMemo(() => {
     const m = {}
