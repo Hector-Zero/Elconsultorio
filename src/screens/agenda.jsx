@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef, useContext } from 'react'
-import { T, Icon, Sidebar, TopBar, btn, TimePicker, ConfirmModal } from './shared.jsx'
+import { T, Icon, Sidebar, TopBar, btn, ConfirmModal } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
+import CitaModal, { APPT_STATUS } from './agenda/citaModal.jsx'
 
 // ── Constants ─────────────────────────────────────────────────────────
 
-const STATUS_LABELS = {
-  pending:   'Pendiente',
-  confirmed: 'Confirmada',
-  completed: 'Terminada',
-  cancelled: 'Cancelada',
-}
+// 5-status enum, matches the appointments.status column. Imported
+// shape from citaModal so both screens stay in sync.
+const STATUS_LABELS = Object.fromEntries(APPT_STATUS.map(s => [s.value, s.label]))
 
 const DOW_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
@@ -108,19 +106,31 @@ function chileISO(dateStr, timeStr) {
 
 function statusStyle(s) {
   switch (s) {
-    case 'confirmed': return { bg: T.primarySoft,         fg: T.primary,                       border: T.primary }
-    case 'pending':   return { bg: T.accentSoft,          fg: T.accent,                        border: T.accent }
-    case 'completed': return { bg: T.bgSunk,              fg: T.inkMuted,                      border: T.inkMuted }
-    case 'cancelled': return { bg: T.dangerSoft ?? T.bgSunk, fg: T.danger ?? T.error ?? T.inkMuted, border: T.danger ?? T.error ?? T.inkMuted }
-    default:          return { bg: T.bgSunk,              fg: T.inkMuted,                      border: T.inkMuted }
+    case 'confirmed':       return { bg: T.primarySoft,              fg: T.primary,                       border: T.primary,                       dashed: false }
+    case 'pending_payment': return { bg: T.accentSoft,               fg: T.accent,                        border: T.accent,                        dashed: true  }
+    case 'completed':       return { bg: T.bgSunk,                   fg: T.inkMuted,                      border: T.inkMuted,                      dashed: false }
+    case 'cancelled':       return { bg: T.dangerSoft ?? T.bgSunk,   fg: T.danger ?? T.inkMuted,          border: T.danger ?? T.inkMuted,          dashed: false }
+    case 'no_show':         return { bg: T.dangerSoft ?? T.bgSunk,   fg: T.danger ?? T.inkMuted,          border: T.danger ?? T.inkMuted,          dashed: false }
+    default:                return { bg: T.bgSunk,                   fg: T.inkMuted,                      border: T.inkMuted,                      dashed: false }
   }
 }
 
-// ── Lead display name (shared with leads.jsx) ─────────────────────────
+// Display name resolver — prefer patients.full_name, fall back to legacy
+// leads.name for older rows that still reference lead_id.
+function apptDisplayName(a) {
+  return (a.patients?.full_name?.trim())
+      || (a.leads?.name?.trim())
+      || a.leads?.phone
+      || a.leads?.chat_id
+      || '— sin nombre —'
+}
 
-const leadName = (l) =>
-  ((l?.name ?? '').trim()) ||
-  (l?.phone ?? l?.chat_id ?? '—')
+// Short label for the session type (first 2 words capitalized).
+function apptServiceShort(a) {
+  const n = a.session_types?.name
+  if (!n) return ''
+  return n
+}
 
 // ── Screen ────────────────────────────────────────────────────────────
 
@@ -136,8 +146,11 @@ export default function AgendaScreen({ onNavigate }) {
   })
   useEffect(() => { try { localStorage.setItem(VIEW_KEY, view) } catch {} }, [view])
   const [anchor, setAnchor] = useState(() => startOfDay(nowChile()))
+  // modal shape:
+  //   null                       — closed
+  //   { slot: { date, hour, proId? } } — create
+  //   { appt: <appt row> }       — edit existing
   const [modal, setModal]   = useState(null)
-  const [statusOpenId, setStatusOpenId] = useState(null)
 
   // range derived from view
   const rangeStart =
@@ -164,13 +177,18 @@ export default function AgendaScreen({ onNavigate }) {
   const navPrevDisabled = prevAnchor < limitBack
   const navNextDisabled = nextAnchor >= limitFwd
 
-  const [appts, setAppts]   = useState([])
-  const [leads, setLeads]   = useState([])
-  const [pros, setPros]     = useState([])
+  const [appts, setAppts]                 = useState([])
+  const [pros, setPros]                   = useState([])
+  const [patientsCatalog, setPatientsCatalog]       = useState([])
+  const [sessionTypesCatalog, setSessionTypesCatalog] = useState([])
   const [showIncomplete, setShowIncomplete] = useState(false)
   const [selectedProIds, setSelectedProIds] = useState(null) // null = all
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(null)
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState(null)
+  // Filter state — multi-select status chips + "Mostrar canceladas" toggle.
+  // Default: all statuses except cancelled visible. Toggle reveals cancelled.
+  const [statusFilter, setStatusFilter]   = useState(() => new Set(['pending_payment', 'confirmed', 'completed', 'no_show']))
+  const [showCancelled, setShowCancelled] = useState(false)
 
   useEffect(() => {
     if (!clientId) return
@@ -241,15 +259,6 @@ export default function AgendaScreen({ onNavigate }) {
     return () => clearInterval(id)
   }, [])
 
-  // close status dropdown on outside click
-  useEffect(() => {
-    if (!statusOpenId) return
-    const h = (e) => {
-      if (!e.target.closest?.('[data-status-pop]')) setStatusOpenId(null)
-    }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [statusOpenId])
 
   // Fetch appointments + leads (filtered by client_id via RLS)
   useEffect(() => {
@@ -257,7 +266,13 @@ export default function AgendaScreen({ onNavigate }) {
     let alive = true
     setLoading(true)
 
-    const apptSelect = 'id, lead_id, professional_id, datetime, duration, status, notes, leads(id, name, phone, chat_id, conversation_context)'
+    const apptSelect = `
+      id, lead_id, patient_id, professional_id, datetime, duration, status, notes,
+      type, session_type_id, payment_link,
+      patients(id, full_name, phone, email, rut),
+      session_types(id, name, price_amount, price_currency),
+      leads(id, name, phone, chat_id, conversation_context)
+    `.replace(/\s+/g, ' ').trim()
 
     const apptQuery = () => {
       let q = supabase
@@ -272,18 +287,27 @@ export default function AgendaScreen({ onNavigate }) {
 
     Promise.all([
       apptQuery(),
+      // Catalog fetches for the cita modal — kept here so they refresh on
+      // client switch but don't re-run with each pagination of the calendar.
       supabase
-        .from('leads')
-        .select('id, chat_id, name, phone, conversation_context')
+        .from('patients')
+        .select('id, full_name, phone, email, rut, address')
         .eq('client_id', clientId)
-        .order('last_updated', { ascending: false })
-        .limit(200),
-    ]).then(([apptRes, leadsRes]) => {
+        .order('full_name', { ascending: true }),
+      supabase
+        .from('session_types')
+        .select('id, name, price_amount, price_currency, display_order')
+        .eq('client_id', clientId)
+        .eq('active', true)
+        .order('display_order', { ascending: true })
+        .order('created_at',    { ascending: true }),
+    ]).then(([apptRes, ptRes, stRes]) => {
       if (!alive) return
-      const errMsg = apptRes.error?.message ?? leadsRes.error?.message ?? null
+      const errMsg = apptRes.error?.message ?? ptRes.error?.message ?? stRes.error?.message ?? null
       setError(errMsg)
       setAppts(apptRes.data ?? [])
-      setLeads(leadsRes.data ?? [])
+      setPatientsCatalog(ptRes.data ?? [])
+      setSessionTypesCatalog(stRes.data ?? [])
       setLoading(false)
     })
 
@@ -298,9 +322,14 @@ export default function AgendaScreen({ onNavigate }) {
   }, [clientId, isPro, professional?.id, rangeStart.getTime(), rangeEnd.getTime()])
 
   // Filter by selected professionals (orphans without professional_id always shown when "all")
-  const visibleAppts = pros.length === 0
+  // and by the toolbar's status / cancelled filters.
+  const visibleAppts = (pros.length === 0
     ? appts
     : appts.filter(a => a.professional_id ? activeProIds.has(a.professional_id) : selectedProIds === null)
+  ).filter(a => {
+    if (a.status === 'cancelled') return showCancelled
+    return statusFilter.has(a.status) || !STATUS_LABELS[a.status] // unknown status falls through
+  })
 
   // index appointments by (dayIdx, hour) for week/day grids; by yyyy-mm-dd for month
   const eventsByCell = {}
@@ -316,16 +345,18 @@ export default function AgendaScreen({ onNavigate }) {
 
   const numDays = view === 'day' ? 1 : view === 'week' ? 7 : daysInMonth(rangeStart)
   const counts  = {
-    confirmed: visibleAppts.filter(a => a.status === 'confirmed').length,
-    pending:   visibleAppts.filter(a => a.status === 'pending').length,
-    free:      Math.max(0, HOURS.length * numDays - visibleAppts.length),
+    confirmed:       visibleAppts.filter(a => a.status === 'confirmed').length,
+    pendingPayment:  visibleAppts.filter(a => a.status === 'pending_payment').length,
+    free:            Math.max(0, HOURS.length * numDays - visibleAppts.length),
   }
   const countsSub = view === 'day' ? 'hoy' : view === 'week' ? 'esta semana' : 'este mes'
 
-  async function changeStatus(id, status) {
-    setStatusOpenId(null)
-    const { error } = await supabase.from('appointments').update({ status }).eq('id', id)
-    if (!error) setAppts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+  function toggleStatusFilter(s) {
+    setStatusFilter(curr => {
+      const next = new Set(curr)
+      if (next.has(s)) next.delete(s); else next.add(s)
+      return next
+    })
   }
 
   return (
@@ -366,7 +397,7 @@ export default function AgendaScreen({ onNavigate }) {
                     title={tip}
                     onClick={() => {
                       if (blocked) return
-                      setModal({ date: nowChile(), hour: '10' })
+                      setModal({ slot: { date: nowChile(), hour: '10' } })
                     }}
                   >
                     <Icon name="plus" size={14} stroke="#fff" /> Nueva cita
@@ -378,13 +409,13 @@ export default function AgendaScreen({ onNavigate }) {
         />
 
         <div style={{ display: 'flex', gap: 24, padding: '14px 24px', borderBottom: `1px solid ${T.line}`, background: T.bg, alignItems: 'center' }}>
-          <Summary k="Citas confirmadas"  v={counts.confirmed} sub={countsSub} />
-          <Summary k="Pendientes"         v={counts.pending}   sub="esperando confirmación" accent />
-          <Summary k="Bloques libres"     v={counts.free}      sub={`de ${HOURS.length * numDays} bloques`} muted />
+          <Summary k="Confirmadas"        v={counts.confirmed}      sub={countsSub} />
+          <Summary k="Pago pendiente"     v={counts.pendingPayment} sub="esperando pago" accent />
+          <Summary k="Bloques libres"     v={counts.free}           sub={`de ${HOURS.length * numDays} bloques`} muted />
           <div style={{ flex: 1 }} />
           <div style={{ fontSize: 11.5, color: T.inkMuted, display: 'flex', alignItems: 'center', gap: 14 }}>
             <Legend color={T.primary} label="Confirmada" />
-            <Legend color={T.accent}  label="Pendiente" dashed />
+            <Legend color={T.accent}  label="Pago pendiente" dashed />
             <Legend color={T.bgSunk}  label="Bloque libre" outline />
           </div>
         </div>
@@ -400,6 +431,13 @@ export default function AgendaScreen({ onNavigate }) {
             />
           </div>
         )}
+
+        <StatusFilterBar
+          statusFilter={statusFilter}
+          onToggle={toggleStatusFilter}
+          showCancelled={showCancelled}
+          onToggleCancelled={() => setShowCancelled(v => !v)}
+        />
 
         {/* Render only when a real pro row exists with a non-empty full_name.
             Never fall back to agents_config.bot_name / agent_name. */}
@@ -445,21 +483,17 @@ export default function AgendaScreen({ onNavigate }) {
               eventsByDate={eventsByDate}
               proById={proById}
               multi={multi}
-              statusOpenId={statusOpenId}
-              setStatusOpenId={setStatusOpenId}
-              changeStatus={changeStatus}
+              onSelectAppt={(ev) => setModal({ appt: ev })}
               onSelectDay={(d) => { setAnchor(d); setView('day') }}
-              onCreate={(d) => setModal({ date: d, hour: '10' })}
+              onCreate={(d) => setModal({ slot: { date: d, hour: '10' } })}
             />
           ) : view === 'day' && multi ? (
             <MultiDayGrid
               day={rangeStart}
               pros={pros.filter(p => activeProIds.has(p.id))}
               appts={visibleAppts}
-              statusOpenId={statusOpenId}
-              setStatusOpenId={setStatusOpenId}
-              changeStatus={changeStatus}
-              onCreate={(date, hour, proId) => setModal({ date, hour, proId })}
+              onSelectAppt={(ev) => setModal({ appt: ev })}
+              onCreate={(date, hour, proId) => setModal({ slot: { date, hour, proId } })}
               now={now}
               isToday={isSameDay(rangeStart, now)}
             />
@@ -469,10 +503,8 @@ export default function AgendaScreen({ onNavigate }) {
               eventsByCell={eventsByCell}
               proById={proById}
               multi={multi}
-              statusOpenId={statusOpenId}
-              setStatusOpenId={setStatusOpenId}
-              changeStatus={changeStatus}
-              onCreate={(date, hour) => setModal({ date, hour })}
+              onSelectAppt={(ev) => setModal({ appt: ev })}
+              onCreate={(date, hour) => setModal({ slot: { date, hour } })}
               onSelectDay={view === 'week' && multi ? (d) => { setAnchor(d); setView('day') } : null}
               showNowLine={view === 'day'}
               isToday={isSameDay(rangeStart, now)}
@@ -503,14 +535,30 @@ export default function AgendaScreen({ onNavigate }) {
         />
       )}
       {modal && (
-        <BookingModal
-          slot={modal}
-          leads={leads}
+        <CitaModal
+          slot={modal.slot}
+          appt={modal.appt}
           pros={pros}
+          patients={patientsCatalog}
+          sessionTypes={sessionTypesCatalog}
           clientId={clientId}
           onClose={() => setModal(null)}
-          onSaved={(appt) => {
-            setAppts(prev => [...prev, appt])
+          onSaved={(saved, meta) => {
+            // Optimistic update — realtime subscription will reconcile soon after.
+            setAppts(prev => {
+              const idx = prev.findIndex(a => a.id === saved.id)
+              if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next }
+              return [...prev, saved]
+            })
+            // If a new patient was created in the modal, fold it into the
+            // catalog so the next "Buscar paciente" prompt picks it up.
+            if (meta?.createdPatient) {
+              setPatientsCatalog(prev => prev.some(p => p.id === meta.createdPatient.id) ? prev : [...prev, meta.createdPatient])
+            }
+            setModal(null)
+          }}
+          onDeleted={(id) => {
+            setAppts(prev => prev.filter(a => a.id !== id))
             setModal(null)
           }}
         />
@@ -521,7 +569,7 @@ export default function AgendaScreen({ onNavigate }) {
 
 // ── Hours grid (day + week) ───────────────────────────────────────────
 
-function HoursGrid({ days, eventsByCell, proById, multi, singlePro, statusOpenId, setStatusOpenId, changeStatus, onCreate, onSelectDay, showNowLine, isToday, now, viewedDay }) {
+function HoursGrid({ days, eventsByCell, proById, multi, singlePro, onSelectAppt, onCreate, onSelectDay, showNowLine, isToday, now, viewedDay }) {
   const n = days.length
   const headerRef = useRef(null)
   const [headerH, setHeaderH] = useState(0)
@@ -612,12 +660,9 @@ function HoursGrid({ days, eventsByCell, proById, multi, singlePro, statusOpenId
                 {ev && (
                   <EventBlock
                     ev={ev}
-                    name={leadName(ev.leads)}
                     pro={proById?.[ev.professional_id]}
                     multi={multi}
-                    open={statusOpenId === ev.id}
-                    onClick={() => setStatusOpenId(o => o === ev.id ? null : ev.id)}
-                    onChangeStatus={(s) => changeStatus(ev.id, s)}
+                    onClick={() => onSelectAppt?.(ev)}
                   />
                 )}
               </div>
@@ -646,7 +691,7 @@ function HoursGrid({ days, eventsByCell, proById, multi, singlePro, statusOpenId
 
 // ── Month grid ────────────────────────────────────────────────────────
 
-function MonthGrid({ monthStart, eventsByDate, proById, multi, statusOpenId, setStatusOpenId, changeStatus, onSelectDay, onCreate }) {
+function MonthGrid({ monthStart, eventsByDate, proById, multi, onSelectAppt, onSelectDay, onCreate }) {
   const firstCell  = startOfWeek(monthStart)
   const totalCells = Math.ceil((((monthStart.getDay() + 6) % 7) + daysInMonth(monthStart)) / 7) * 7
   const cells = Array.from({ length: totalCells }, (_, i) => addDays(firstCell, i))
@@ -707,61 +752,31 @@ function MonthGrid({ monthStart, eventsByDate, proById, multi, statusOpenId, set
                 const border = usePro ? pro.color : s.border
                 const dt = new Date(new Date(ev.datetime).toLocaleString('en-US', { timeZone: TZ }))
                 const time = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
+                const display = apptDisplayName(ev)
                 const label = usePro
                   ? `${time} ${pro.initials || initialsFromName(pro.full_name)}`
-                  : `${time} ${leadName(ev.leads)}`
+                  : `${time} ${display}`
                 const tooltip = usePro
-                  ? `${leadName(ev.leads)} · ${time} · ${pro.full_name}`
-                  : `${leadName(ev.leads)} · ${time}`
-                const isOpen = statusOpenId === ev.id
+                  ? `${display} · ${time} · ${pro.full_name}`
+                  : `${display} · ${time}`
+                const struck = ev.status === 'cancelled'
                 return (
                   <div
                     key={ev.id}
-                    data-status-pop
                     title={tooltip}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setStatusOpenId?.(o => o === ev.id ? null : ev.id)
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onSelectAppt?.(ev) }}
                     style={{
-                      position: 'relative',
                       fontSize: 10.5, padding: '2px 5px', borderRadius: 3,
                       background: bg, color: fg,
-                      borderLeft: `2px solid ${border}`,
+                      borderLeft: `2px ${s.dashed ? 'dashed' : 'solid'} ${border}`,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       fontWeight: usePro ? 600 : 400,
                       cursor: 'pointer',
+                      textDecoration: struck ? 'line-through' : 'none',
+                      opacity: ev.status === 'completed' ? 0.6 : 1,
                     }}
                   >
                     {label}
-                    {isOpen && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          position: 'absolute', top: '100%', left: 0, marginTop: 4,
-                          background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 8,
-                          boxShadow: '0 8px 24px rgba(20,18,14,0.12)', padding: 4, zIndex: 30, minWidth: 150,
-                          color: T.ink, fontWeight: 400, textOverflow: 'clip', whiteSpace: 'normal',
-                        }}
-                      >
-                        <div style={{ padding: '6px 10px 4px', fontSize: 10, color: T.inkMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                          Cambiar estado
-                        </div>
-                        {Object.entries(STATUS_LABELS).map(([k, lab]) => (
-                          <div
-                            key={k}
-                            onClick={() => changeStatus?.(ev.id, k)}
-                            style={{
-                              padding: '7px 10px', fontSize: 12.5, color: T.inkSoft, cursor: 'pointer', borderRadius: 4,
-                              background: ev.status === k ? T.bgSunk : 'transparent',
-                              fontWeight: ev.status === k ? 500 : 400,
-                            }}
-                          >
-                            {lab}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )
               })}
@@ -778,63 +793,59 @@ function MonthGrid({ monthStart, eventsByDate, proById, multi, statusOpenId, set
 
 // ── Event block + status dropdown ─────────────────────────────────────
 
-function EventBlock({ ev, name, pro, multi, open, onClick, onChangeStatus }) {
+function EventBlock({ ev, pro, multi, onClick }) {
   const s = statusStyle(ev.status)
   const usePro = !!(multi && pro)
   const bg     = usePro ? hexAlpha(pro.color, 0.18) : s.bg
   const border = usePro ? pro.color : s.border
   const fg     = usePro ? pro.color : s.fg
+  const name   = apptDisplayName(ev)
   const display = usePro ? (pro.initials || initialsFromName(pro.full_name)) : name
+  const service = apptServiceShort(ev)
   const dt = new Date(new Date(ev.datetime).toLocaleString('en-US', { timeZone: TZ }))
   const time = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
-  const tooltip = usePro ? `${name} · ${time} · ${pro.full_name}` : ''
+  const tooltip = `${name} · ${time}${service ? ` · ${service}` : ''}${pro ? ` · ${pro.full_name}` : ''} · ${STATUS_LABELS[ev.status] ?? ev.status}`
+  const struck    = ev.status === 'cancelled'
+  const completed = ev.status === 'completed'
   return (
-    <div data-status-pop style={{ position: 'relative', height: '100%' }} title={tooltip}>
+    <div style={{ position: 'relative', height: '100%' }} title={tooltip}>
       <div
-        onClick={(e) => { e.stopPropagation(); onClick() }}
+        onClick={(e) => { e.stopPropagation(); onClick?.() }}
         style={{
           height: '100%', padding: '6px 8px', borderRadius: 6,
           background: bg,
-          borderLeft: `3px solid ${border}`,
+          borderLeft: `3px ${s.dashed ? 'dashed' : 'solid'} ${border}`,
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
           cursor: 'pointer',
+          opacity: completed ? 0.55 : 1,
+          textDecoration: struck ? 'line-through' : 'none',
         }}
       >
         <div style={{ fontSize: 11.5, fontWeight: 600, color: fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {display}
         </div>
-        <div style={{ fontSize: 10, color: s.fg, opacity: 0.85, display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span>{ev.duration ?? 50} min</span>
-          <span>·</span>
-          <span>{STATUS_LABELS[ev.status] ?? ev.status}</span>
+        <div style={{ fontSize: 10, color: s.fg, opacity: 0.85, display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span>{ev.duration ?? 50}m</span>
+          {service && <><span>·</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{service}</span></>}
         </div>
       </div>
-      {open && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: 'absolute', top: 'calc(100% + 4px)', left: 0,
-            background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(20,18,14,0.12)', padding: 4, zIndex: 30, minWidth: 150,
-          }}
-        >
-          <div style={{ padding: '6px 10px 4px', fontSize: 10, color: T.inkMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-            Cambiar estado
-          </div>
-          {Object.entries(STATUS_LABELS).map(([k, label]) => (
-            <div
-              key={k}
-              onClick={() => onChangeStatus(k)}
-              style={{
-                padding: '7px 10px', fontSize: 12.5, color: T.inkSoft, cursor: 'pointer', borderRadius: 4,
-                background: ev.status === k ? T.bgSunk : 'transparent',
-                fontWeight: ev.status === k ? 500 : 400,
-              }}
-            >
-              {label}
-            </div>
-          ))}
-        </div>
+
+      {/* Status overlays — small badges in the corner */}
+      {ev.status === 'pending_payment' && (
+        <span title="Pago pendiente" style={{
+          position: 'absolute', top: 2, right: 2,
+          fontSize: 9, fontWeight: 700, lineHeight: 1,
+          padding: '2px 4px', borderRadius: 3,
+          background: T.accent, color: '#fff',
+        }}>$</span>
+      )}
+      {ev.status === 'no_show' && (
+        <span title="No asistió" style={{
+          position: 'absolute', top: 2, right: 2,
+          fontSize: 9, fontWeight: 700, lineHeight: 1,
+          padding: '2px 5px', borderRadius: 3,
+          background: T.danger, color: '#fff',
+        }}>!</span>
       )}
     </div>
   )
@@ -1016,7 +1027,7 @@ function ProChip({ pro, color, label, selected, onClick }) {
 }
 
 // Multi-column day view: one column per professional
-function MultiDayGrid({ day, pros, appts, statusOpenId, setStatusOpenId, changeStatus, onCreate, now, isToday }) {
+function MultiDayGrid({ day, pros, appts, onSelectAppt, onCreate, now, isToday }) {
   const dowKey = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'][(day.getDay() + 6) % 7]
   const apptByPro = {}
   appts.forEach(a => {
@@ -1088,12 +1099,9 @@ function MultiDayGrid({ day, pros, appts, statusOpenId, setStatusOpenId, changeS
                 {ev && (
                   <EventBlock
                     ev={ev}
-                    name={leadName(ev.leads)}
                     pro={p}
                     multi={false}
-                    open={statusOpenId === ev.id}
-                    onClick={() => setStatusOpenId(o => o === ev.id ? null : ev.id)}
-                    onChangeStatus={(s) => changeStatus(ev.id, s)}
+                    onClick={() => onSelectAppt?.(ev)}
                   />
                 )}
               </div>
@@ -1105,194 +1113,50 @@ function MultiDayGrid({ day, pros, appts, statusOpenId, setStatusOpenId, changeS
   )
 }
 
-// ── Booking modal (creates appointment) ───────────────────────────────
 
-function BookingModal({ slot, leads, pros, clientId, onClose, onSaved }) {
-  const [mode, setMode]         = useState('existing')   // 'existing' | 'new'
-  const [leadId, setLeadId]     = useState('')
-  const [newName, setNewName]   = useState('')
-  const [newPhone, setNewPhone] = useState('')
-  const [newEmail, setNewEmail] = useState('')
-  const [date, setDate]         = useState(toDateInput(slot.date ?? nowChile()))
-  const [time, setTime]         = useState(`${slot.hour ?? '10'}:00`)
-  const [duration, setDuration] = useState(50)
-  const [notes, setNotes]       = useState('')
-  const [proId, setProId]       = useState(slot.proId ?? (pros?.[0]?.id ?? ''))
-  const [saving, setSaving]     = useState(false)
-  const [err, setErr]           = useState(null)
 
-  const cutoff   = new Date(nowChile().getTime() + 12 * 60 * 60 * 1000)
-  const minDate  = toDateInput(cutoff)
-  const minTime  = date === minDate
-    ? `${String(cutoff.getHours()).padStart(2,'0')}:${String(cutoff.getMinutes()).padStart(2,'0')}`
-    : undefined
+// ── Status filter bar (toolbar) ───────────────────────────────────────
 
-  async function save() {
-    const picked = new Date(`${date}T${time}:00`)
-    if (picked < cutoff) { setErr('Las citas deben agendarse con al menos 12 horas de anticipación'); return }
-    if (mode === 'existing' && !leadId) { setErr('Selecciona un lead'); return }
-    if (mode === 'new' && !newName.trim()) { setErr('Ingresa un nombre'); return }
-    if (mode === 'new' && !newPhone.trim()) { setErr('Ingresa un teléfono'); return }
-    if (pros && pros.length > 0 && !proId) { setErr('Selecciona un profesional'); return }
-
-    setSaving(true); setErr(null)
-    const datetime = chileISO(date, time)
-
-    let usedLeadId = leadId
-    let leadObj    = leads.find(l => l.id === leadId) ?? null
-
-    if (mode === 'new') {
-      const syntheticChatId = `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      const { data: ld, error: lerr } = await supabase
-        .from('leads')
-        .insert({
-          client_id:      clientId,
-          chat_id:        syntheticChatId,
-          name:           newName.trim(),
-          phone:          newPhone.trim(),
-          email:          newEmail.trim() || null,
-          phase:          'confirmed',
-          quality:        'calificado',
-          qualified_lead: true,
-        })
-        .select('id, chat_id, name, phone, conversation_context')
-        .single()
-      if (lerr) { setSaving(false); setErr(lerr.message); return }
-      usedLeadId = ld.id
-      leadObj    = ld
-    }
-
-    const { data, error } = await supabase
-      .from('appointments')
-      .insert({
-        client_id:       clientId,
-        lead_id:         usedLeadId,
-        professional_id: proId || null,
-        datetime,
-        duration,
-        status:          'pending',
-        notes:           notes || null,
-      })
-      .select('id, lead_id, professional_id, datetime, duration, status, notes')
-      .single()
-    setSaving(false)
-    if (error) { setErr(error.message); return }
-    onSaved({ ...data, leads: leadObj })
-  }
-
+function StatusFilterBar({ statusFilter, onToggle, showCancelled, onToggleCancelled }) {
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.35)',
-      display: 'grid', placeItems: 'center', zIndex: 50,
+    <div style={{
+      padding: '10px 24px', borderBottom: `1px solid ${T.line}`, background: T.bg,
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: 480, background: T.bgRaised, borderRadius: 14,
-        boxShadow: '0 24px 60px rgba(20,18,14,0.25)', overflow: 'hidden',
-      }}>
-        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${T.lineSoft}` }}>
-          <div style={{ fontFamily: T.serif, fontSize: 22, color: T.ink }}>Nueva cita</div>
-          <div style={{ fontSize: 12, color: T.inkMuted, marginTop: 4 }}>
-            Crea una cita manualmente para un lead capturado por el bot.
-          </div>
-        </div>
+      <div style={{
+        fontSize: 10.5, color: T.inkMuted, letterSpacing: 0.5, textTransform: 'uppercase',
+        marginRight: 4,
+      }}>Estados</div>
+      {APPT_STATUS.filter(s => s.value !== 'cancelled').map(s => {
+        const on = statusFilter.has(s.value)
+        const sty = statusStyle(s.value)
+        return (
+          <button
+            key={s.value}
+            onClick={() => onToggle(s.value)}
+            style={{
+              border: `1px ${sty.dashed ? 'dashed' : 'solid'} ${on ? sty.border : T.line}`,
+              background: on ? sty.bg : 'transparent',
+              color: on ? sty.fg : T.inkMuted,
+              padding: '4px 10px', borderRadius: 999,
+              fontSize: 11.5, fontWeight: 500, fontFamily: T.sans,
+              cursor: 'pointer',
+            }}
+          >{s.label}</button>
+        )
+      })}
 
-        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', background: T.bgSunk, borderRadius: 8, border: `1px solid ${T.line}`, padding: 2 }}>
-            {[['existing', 'Lead existente'], ['new', 'Persona nueva']].map(([k, label]) => (
-              <button key={k} type="button" onClick={() => setMode(k)} style={{
-                flex: 1, border: 'none', background: mode === k ? T.bgRaised : 'transparent',
-                color: mode === k ? T.ink : T.inkMuted,
-                padding: '7px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                boxShadow: mode === k ? '0 1px 2px rgba(0,0,0,.05)' : 'none',
-              }}>{label}</button>
-            ))}
-          </div>
+      <div style={{ flex: 1 }} />
 
-          {pros && pros.length > 1 && (
-            <Field label="Profesional">
-              <select value={proId} onChange={e => setProId(e.target.value)} style={selectStyle}>
-                <option value="">— selecciona —</option>
-                {pros.map(p => (
-                  <option key={p.id} value={p.id}>{p.full_name}</option>
-                ))}
-              </select>
-            </Field>
-          )}
-
-          {pros && pros.length === 0 && (
-            <div style={{
-              padding: '10px 12px', borderRadius: 8,
-              background: T.bgSunk, border: `1px solid ${T.line}`,
-              fontSize: 12, color: T.inkMuted, lineHeight: 1.5,
-            }}>
-              Agrega un profesional en Ajustes → Agenda para asignar esta cita.
-            </div>
-          )}
-
-          {mode === 'existing' ? (
-            <Field label="Lead">
-              <select value={leadId} onChange={e => setLeadId(e.target.value)} style={selectStyle}>
-                <option value="">— selecciona un lead —</option>
-                {leads.map(l => (
-                  <option key={l.id ?? l.chat_id} value={l.id}>{leadName(l)}</option>
-                ))}
-              </select>
-            </Field>
-          ) : (
-            <>
-              <Field label="Nombre">
-                <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Nombre completo" style={selectStyle} />
-              </Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Teléfono">
-                  <input value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="+56 9 …" style={selectStyle} />
-                </Field>
-                <Field label="Email (opcional)">
-                  <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="correo@ejemplo.cl" style={selectStyle} />
-                </Field>
-              </div>
-            </>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Field label="Fecha">
-              <input type="date" value={date} min={minDate} onChange={e => setDate(e.target.value)} style={selectStyle} />
-            </Field>
-            <Field label="Hora">
-              <TimePicker value={time} minTime={minTime} onChange={setTime} />
-            </Field>
-            <Field label="Duración">
-              <select value={duration} onChange={e => setDuration(+e.target.value)} style={selectStyle}>
-                <option value={30}>30 min</option>
-                <option value={60}>60 min</option>
-              </select>
-            </Field>
-          </div>
-
-          <Field label="Notas (privadas)">
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional…" style={{ ...selectStyle, height: 70, resize: 'none', fontFamily: T.sans }} />
-          </Field>
-
-          {err && <div style={{ fontSize: 12, color: T.danger ?? T.error ?? '#c33' }}>{err}</div>}
-        </div>
-
-        <div style={{ padding: '14px 24px', borderTop: `1px solid ${T.lineSoft}`, background: T.bg, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose} style={btn('ghost')} disabled={saving}>Cancelar</button>
-          <button onClick={save}    style={btn('primary')} disabled={saving}>
-            {saving ? 'Guardando…' : 'Agendar cita'}
-          </button>
-        </div>
-      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.inkSoft, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={showCancelled}
+          onChange={onToggleCancelled}
+          style={{ accentColor: T.primary }}
+        />
+        Mostrar canceladas
+      </label>
     </div>
   )
 }
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <div style={{ fontSize: 11, color: T.inkMuted, marginBottom: 6, letterSpacing: 0.4, textTransform: 'uppercase' }}>{label}</div>
-      {children}
-    </div>
-  )
-}
-
