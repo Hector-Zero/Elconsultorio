@@ -47,12 +47,14 @@ DECLARE
   v_lock_key       int;
   v_lock_ok        boolean;
 
-  v_existing_id    uuid;
-  v_patient_id     uuid;
-  v_assignment_id  uuid;
-  v_lead_id        uuid;
-  v_appt_id        uuid;
-  v_pro_name       text;
+  v_existing_id           uuid;
+  v_idempotent_appt_id    uuid;
+  v_idempotent_patient_id uuid;
+  v_patient_id            uuid;
+  v_assignment_id         uuid;
+  v_lead_id               uuid;
+  v_appt_id               uuid;
+  v_pro_name              text;
 BEGIN
   -- ── Validation ────────────────────────────────────────────────────────────
   v_full_name := NULLIF(btrim(p_patient_data->>'full_name'), '');
@@ -72,6 +74,49 @@ BEGIN
       'success', false, 'error', 'validation',
       'message', 'client_id, professional_id y datetime son requeridos'
     );
+  END IF;
+
+  -- Resolve the lead linked to this chat_id once — used for both the
+  -- idempotency check below and the lead update in step E. Null if no
+  -- lead exists yet (e.g. a chat that never produced a lead row).
+  IF p_chat_id IS NOT NULL AND p_chat_id <> '' THEN
+    SELECT id INTO v_lead_id
+      FROM leads
+     WHERE client_id = p_client_id
+       AND chat_id   = p_chat_id
+     LIMIT 1;
+  END IF;
+
+  -- ── Idempotency: same chat_id + same slot already booked = same booking ──
+  -- Make.com retries on transient errors. Without this guard, a successful
+  -- first call followed by a network-blip retry returns 409 slot_taken (the
+  -- bot's own previous booking blocks its retry). Match on
+  -- (client, professional, datetime, lead_id-from-chat, active status). When
+  -- v_lead_id is null we deliberately skip — a chat without a lead row has
+  -- no key to dedupe on, and the slot-locked / slot-taken paths still cover
+  -- concurrent collisions correctly.
+  IF v_lead_id IS NOT NULL THEN
+    SELECT a.id, a.patient_id
+      INTO v_idempotent_appt_id, v_idempotent_patient_id
+      FROM appointments a
+     WHERE a.client_id       = p_client_id
+       AND a.professional_id = p_professional_id
+       AND a.datetime        = p_datetime
+       AND a.lead_id         = v_lead_id
+       AND a.status IN ('pending_payment', 'confirmed')
+     LIMIT 1;
+
+    IF v_idempotent_appt_id IS NOT NULL THEN
+      RETURN jsonb_build_object(
+        'success',           true,
+        'appointment_id',    v_idempotent_appt_id,
+        'patient_id',        v_idempotent_patient_id,
+        'payment_link',      NULL,
+        'datetime_santiago', to_char(p_datetime AT TIME ZONE 'America/Santiago', 'YYYY-MM-DD HH24:MI'),
+        'professional_name', (SELECT full_name FROM professionals WHERE id = p_professional_id),
+        'idempotent',        true
+      );
+    END IF;
   END IF;
 
   -- ── STEP A: advisory lock + slot check ───────────────────────────────────
@@ -142,16 +187,7 @@ BEGIN
   END IF;
 
   -- ── STEP D: insert appointment ───────────────────────────────────────────
-  -- Optional lead link, by chat_id+client_id. Helps trace bot bookings back
-  -- to their conversation; harmless if missing.
-  IF p_chat_id IS NOT NULL AND p_chat_id <> '' THEN
-    SELECT id INTO v_lead_id
-      FROM leads
-     WHERE client_id = p_client_id
-       AND chat_id   = p_chat_id
-     LIMIT 1;
-  END IF;
-
+  -- v_lead_id was resolved up top (idempotency check) and is reused here.
   INSERT INTO appointments (
     client_id, professional_id, patient_id, lead_id,
     datetime, duration, type, status, session_type_id, notes, payment_link
