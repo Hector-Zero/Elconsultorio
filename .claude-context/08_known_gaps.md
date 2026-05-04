@@ -125,23 +125,33 @@ deploy SPA to Vercel, set up DNS.
 
 Both pre-date the refactor; flagging for cleanup pass.
 
+### 14. Extract data hook from agenda.jsx shell (2026-05-04)
+
+`src/screens/agenda.jsx` shell is ~500 lines after Phase A split. Most of
+that is JSX layout plus a single data-loading useEffect that combines:
+professional fetching, schedule hydration, appointment query, patient
++ session-type catalogs, and a realtime subscription.
+
+Future work: extract `useAgendaData()` hook to encapsulate the effect,
+trim shell toward ~300. Non-mechanical, deferred until Phase B or later.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 14. Mercado Pago payment integration
+### 15. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 15. Onboard Centro Vitalis as first paying client
+### 16. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 16. Build dashboards in order of priority
+### 17. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link
