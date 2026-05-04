@@ -117,23 +117,31 @@ Frontend errors and Edge Function errors are invisible right now. Sentry
 SPA needs a production deployment. Buy `elconsultorio.com` (or similar),
 deploy SPA to Vercel, set up DNS.
 
+### 13. Dead code surfaced during settings.jsx split (2026-05-04)
+
+- `DEFAULT_SESSION_TYPES` constant in `src/screens/settings/profile.jsx`
+  is defined but never referenced
+- `config` prop on `PerfilDisponibilidad` is passed but never read
+
+Both pre-date the refactor; flagging for cleanup pass.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 13. Mercado Pago payment integration
+### 14. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 14. Onboard Centro Vitalis as first paying client
+### 15. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 15. Build dashboards in order of priority
+### 16. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link
