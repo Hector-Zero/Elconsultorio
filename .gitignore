@@ -10,4 +10,10 @@ supabase/.temp/
 supabase/.branches/
 
 # Deno function caches
-**/.deno/
+**/.deno/.claude/
+
+# Claude Code internal state
+.claude/
+
+# Claude Code internal state
+.claude/
