@@ -135,23 +135,36 @@ professional fetching, schedule hydration, appointment query, patient
 Future work: extract `useAgendaData()` hook to encapsulate the effect,
 trim shell toward ~300. Non-mechanical, deferred until Phase B or later.
 
+### 15. Extract save/form hook from citaModal (2026-05-04)
+
+`src/screens/agenda/citaModal/index.jsx` shell is ~575 lines after Phase A
+split. The bulk is `performSave` (~175 lines: validation, past/off-schedule
+warnings, conflict check, patient INSERT with sticky-id dedup, patient_
+assignments INSERT, appointment INSERT/UPDATE, error mapping) plus a
+17-prop `PatientPicker` interface that signals state ownership wants
+restructuring.
+
+Future work: extract `useCitaForm()` hook to encapsulate save/delete
+pipelines and form state, collapse the PatientPicker prop interface to
+a single `form` object. Non-mechanical, deferred until Phase B or later.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 15. Mercado Pago payment integration
+### 16. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 16. Onboard Centro Vitalis as first paying client
+### 17. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 17. Build dashboards in order of priority
+### 18. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link

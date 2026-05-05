@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, Sidebar, TopBar, btn, ConfirmModal } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
-import CitaModal from './agenda/citaModal.jsx'
+import CitaModal from './agenda/citaModal'
 import {
   STATUS_LABELS, DOW_KEY_BY_NUM, HOURS, TZ,
   addDays, addMonths, daysInMonth, fmtDay, fmtMonth, fmtRange,

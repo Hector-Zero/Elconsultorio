@@ -1,159 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { T, Icon, btn, ConfirmModal } from '../shared.jsx'
-import { supabase } from '../../lib/supabase.js'
+import { T, Icon, btn, ConfirmModal } from '../../shared.jsx'
+import { supabase } from '../../../lib/supabase.js'
+import {
+  APPT_STATUS, APPT_TYPES, DURATIONS, DAY_LABELS_LONG, DOW_KEYS,
+  FALLBACK_TIMES, timesFromRanges,
+  inputStyle, monoInput,
+  chileISO, fmtCLP,
+  initialState, SAVED_SELECT, Label,
+} from './_shared.jsx'
+import PatientPicker from './patientPicker.jsx'
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
-export const APPT_STATUS = [
-  { value: 'pending_payment', label: 'Pago pendiente' },
-  { value: 'confirmed',       label: 'Confirmada' },
-  { value: 'completed',       label: 'Terminada' },
-  { value: 'cancelled',       label: 'Cancelada' },
-  { value: 'no_show',         label: 'No asistió' },
-]
-
-const APPT_TYPES = [
-  { value: 'presencial', label: 'Presencial' },
-  { value: 'online',     label: 'Online' },
-]
-
-const DURATIONS = [
-  { value: 30, label: '30 min' },
-  { value: 60, label: '1 hora' },
-]
-
-// 0=Sun..6=Sat, matching Postgres / professional_schedules.day_of_week.
-const DAY_LABELS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
-const DOW_KEYS        = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-
-// 30-min granularity is the booking floor — drop the seconds. Fallback grid
-// covers the working day for off-schedule overrides.
-const FALLBACK_TIMES = (() => {
-  const out = []
-  for (let h = 6; h <= 22; h++) {
-    out.push(`${String(h).padStart(2, '0')}:00`)
-    if (h < 22) out.push(`${String(h).padStart(2, '0')}:30`)
-  }
-  return out
-})()
-
-function hhmm(t) {
-  const m = String(t ?? '').match(/^(\d{2}:\d{2})/)
-  return m ? m[1] : ''
-}
-
-// Build the dropdown options from a pro's availability ranges for a given day.
-// Returns [] when the day has no ranges — caller falls back to FALLBACK_TIMES.
-function timesFromRanges(ranges) {
-  if (!Array.isArray(ranges) || ranges.length === 0) return []
-  const slots = new Set()
-  for (const r of ranges) {
-    const s = hhmm(r.start), e = hhmm(r.end)
-    if (!s || !e) continue
-    const [sh, sm] = s.split(':').map(Number)
-    const [eh, em] = e.split(':').map(Number)
-    let mins = sh * 60 + sm
-    const endMin = eh * 60 + em
-    while (mins < endMin) {
-      const h  = Math.floor(mins / 60)
-      const mm = mins % 60
-      if (mm === 0 || mm === 30) {
-        slots.add(`${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`)
-      }
-      mins += 30
-    }
-  }
-  return Array.from(slots).sort()
-}
-
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-const inputStyle = {
-  padding: '10px 12px', borderRadius: 8,
-  border: `1px solid ${T.line}`, background: T.bg,
-  fontSize: 13, color: T.ink, width: '100%', outline: 'none',
-  fontFamily: T.sans, boxSizing: 'border-box',
-}
-const monoInput = { ...inputStyle, fontFamily: T.mono }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function toDateInputStr(d) {
-  const yyyy = d.getFullYear()
-  const mm   = String(d.getMonth() + 1).padStart(2, '0')
-  const dd   = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
-}
-
-function toTimeInputStr(d) {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-const TZ = 'America/Santiago'
-
-// Treat (dateStr, timeStr) as Santiago wall-clock and return the corresponding
-// UTC ISO string. Santiago is UTC-4 year-round per project policy (no DST
-// observed); appending the literal "-04:00" lets the JS Date parser produce
-// the correct instant directly.
-//
-// PRIOR BUG: an Intl-based offset computation that round-tripped through
-// `toLocaleString` returned 0 minutes when the browser's local timezone
-// happened to be Santiago, so a 09:00 pick was stored as 09:00 UTC instead
-// of 13:00 UTC. Hardcoding the offset removes that dependency on the
-// browser's TZ.
-function chileISO(dateStr, timeStr) {
-  return new Date(`${dateStr}T${timeStr}:00-04:00`).toISOString()
-}
-
-// Render-side helper: convert a stored UTC ISO into a JS Date whose
-// .getHours()/.getDate() reflect Santiago wall-clock. Browser-TZ-independent
-// because the second `new Date(...)` parses a string whose numeric components
-// are the Santiago wall-clock — getHours() then echoes those numbers.
-function toChileDate(iso) {
-  return new Date(new Date(iso).toLocaleString('en-US', { timeZone: TZ }))
-}
-
-function fmtCLP(n) {
-  if (n == null || n === '') return ''
-  return '$' + Number(n).toLocaleString('es-CL')
-}
-
-// Initial state from either a slot (create) or an appointment (edit).
-function initialState({ slot, appt }) {
-  if (appt) {
-    const d = toChileDate(appt.datetime)
-    return {
-      isEdit:        true,
-      date:          toDateInputStr(d),
-      time:          toTimeInputStr(d),
-      duration:      appt.duration ?? 60,
-      proId:         appt.professional_id ?? '',
-      sessionTypeId: appt.session_type_id ?? '',
-      type:          appt.type ?? 'presencial',
-      status:        appt.status ?? 'pending_payment',
-      notes:         appt.notes ?? '',
-      paymentLink:   appt.payment_link ?? '',
-      patientId:     appt.patient_id ?? '',
-      patientMode:   'existing',
-    }
-  }
-  const baseDate = slot?.date ?? new Date()
-  const baseHour = slot?.hour != null ? String(slot.hour).padStart(2, '0') : '10'
-  return {
-    isEdit:        false,
-    date:          toDateInputStr(baseDate),
-    time:          `${baseHour}:00`,
-    duration:      60,
-    proId:         slot?.proId ?? '',
-    sessionTypeId: '',
-    type:          'presencial',
-    status:        'pending_payment',
-    notes:         '',
-    paymentLink:   '',
-    patientId:     '',
-    patientMode:   'existing',
-  }
-}
+export { APPT_STATUS } from './_shared.jsx'
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -525,132 +382,25 @@ export default function CitaModal({
           <div style={{ flex: 1, overflow: 'auto', padding: '18px 22px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Patient — editable picker on create, read-only display on edit. */}
-            {isEdit ? (
-              (() => {
-                // Prefer the joined patients row from the appointment payload;
-                // fall back to the catalog if the join was empty.
-                const ptInfo = appt?.patients ?? selectedPat ?? null
-                const meta   = ptInfo
-                  ? [ptInfo.rut, ptInfo.email, ptInfo.phone].filter(Boolean).join(' · ')
-                  : ''
-                return (
-                  <div>
-                    <Label>Paciente</Label>
-                    <div style={{
-                      padding: '10px 12px', borderRadius: 8,
-                      background: T.bgSunk, border: `1px solid ${T.line}`,
-                    }}>
-                      <div style={{ fontSize: 14, color: T.ink, fontWeight: 500 }}>
-                        {ptInfo?.full_name ?? '— sin paciente —'}
-                      </div>
-                      {meta && (
-                        <div style={{ fontSize: 11.5, color: T.inkMuted, marginTop: 3 }}>{meta}</div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()
-            ) : (
-              <div>
-                <Label>Paciente *</Label>
-                <div style={{
-                  display: 'flex', gap: 6, marginBottom: 8,
-                  background: T.bgSunk, borderRadius: 8, padding: 2, border: `1px solid ${T.line}`,
-                }}>
-                  {[['existing', 'Buscar paciente'], ['new', '+ Crear nuevo']].map(([k, label]) => (
-                    <button key={k} type="button" onClick={() => setPatientMode(k)} style={{
-                      flex: 1, border: 'none', background: patientMode === k ? T.bgRaised : 'transparent',
-                      color: patientMode === k ? T.ink : T.inkMuted,
-                      padding: '7px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                    }}>{label}</button>
-                  ))}
-                </div>
-
-                {patientMode === 'existing' ? (
-                  <div ref={searchRef} style={{ position: 'relative' }}>
-                    <input
-                      value={patientSearch || (selectedPat?.full_name ?? '')}
-                      onChange={e => { setPatientSearch(e.target.value); setSearchOpen(true); if (selectedPat) setPatientId('') }}
-                      onFocus={() => setSearchOpen(true)}
-                      placeholder="Buscar por nombre, RUT o email…"
-                      style={inputStyle}
-                    />
-                    {selectedPat && !searchOpen && (
-                      <button
-                        onClick={clearPatient}
-                        title="Cambiar paciente"
-                        style={{
-                          position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                          background: 'transparent', border: 'none', cursor: 'pointer',
-                          color: T.inkMuted, padding: 6,
-                        }}
-                      ><Icon name="x" size={13} stroke={T.inkMuted} /></button>
-                    )}
-                    {searchOpen && (
-                      <div style={{
-                        position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-                        background: T.bgRaised, border: `1px solid ${T.line}`, borderRadius: 8,
-                        boxShadow: '0 8px 24px rgba(20,18,14,0.16)', maxHeight: 240, overflow: 'auto', zIndex: 10,
-                      }}>
-                        {filteredPatients.length === 0 ? (
-                          <div style={{ padding: '10px 12px', fontSize: 12.5, color: T.inkMuted, fontStyle: 'italic' }}>
-                            Sin resultados. Cambia a "Crear nuevo" para agregar.
-                          </div>
-                        ) : filteredPatients.map(p => (
-                          <div
-                            key={p.id}
-                            onClick={() => pickPatient(p)}
-                            style={{
-                              padding: '8px 12px', fontSize: 12.5, cursor: 'pointer',
-                              borderBottom: `1px solid ${T.lineSoft}`,
-                              background: p.id === patientId ? T.bgSunk : 'transparent',
-                            }}
-                          >
-                            <div style={{ color: T.ink, fontWeight: 500 }}>{p.full_name}</div>
-                            <div style={{ fontSize: 11, color: T.inkMuted, marginTop: 2 }}>
-                              {[p.rut, p.email, p.phone].filter(Boolean).join(' · ') || '—'}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{
-                    padding: 12, borderRadius: 8, background: T.bgSunk, border: `1px solid ${T.line}`,
-                    display: 'flex', flexDirection: 'column', gap: 10,
-                  }}>
-                    <div>
-                      <Label>Nombre completo *</Label>
-                      <input
-                        value={newPt.full_name}
-                        onChange={e => setNewPt(p => ({ ...p, full_name: e.target.value }))}
-                        placeholder="Ej: María Pérez"
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div>
-                        <Label>RUT</Label>
-                        <input value={newPt.rut} onChange={e => setNewPt(p => ({ ...p, rut: e.target.value }))} placeholder="12.345.678-9" style={monoInput} />
-                      </div>
-                      <div>
-                        <Label>Teléfono</Label>
-                        <input value={newPt.phone} onChange={e => setNewPt(p => ({ ...p, phone: e.target.value }))} placeholder="+56 9 …" style={monoInput} />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Email</Label>
-                      <input type="email" value={newPt.email} onChange={e => setNewPt(p => ({ ...p, email: e.target.value }))} placeholder="correo@ejemplo.cl" style={inputStyle} />
-                    </div>
-                    <div>
-                      <Label>Dirección</Label>
-                      <input value={newPt.address} onChange={e => setNewPt(p => ({ ...p, address: e.target.value }))} placeholder="Av. … 1234, Comuna" style={inputStyle} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            <PatientPicker
+              isEdit={isEdit}
+              appt={appt}
+              selectedPat={selectedPat}
+              patientId={patientId}
+              setPatientId={setPatientId}
+              patientMode={patientMode}
+              setPatientMode={setPatientMode}
+              patientSearch={patientSearch}
+              setPatientSearch={setPatientSearch}
+              searchOpen={searchOpen}
+              setSearchOpen={setSearchOpen}
+              newPt={newPt}
+              setNewPt={setNewPt}
+              filteredPatients={filteredPatients}
+              pickPatient={pickPatient}
+              clearPatient={clearPatient}
+              searchRef={searchRef}
+            />
 
             {/* Professional + session type */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -832,23 +582,5 @@ export default function CitaModal({
         />
       )}
     </>
-  )
-}
-
-// Pull joined fields back so the parent renders the new row instantly.
-const SAVED_SELECT = `
-  id, lead_id, patient_id, professional_id, datetime, duration, status, notes,
-  type, session_type_id, payment_link,
-  patients(id, full_name, phone, email, rut),
-  session_types(id, name, price_amount, price_currency),
-  leads(id, name, phone, chat_id, conversation_context)
-`.replace(/\s+/g, ' ').trim()
-
-function Label({ children }) {
-  return (
-    <div style={{
-      fontSize: 11, color: T.inkMuted, marginBottom: 6,
-      letterSpacing: 0.4, textTransform: 'uppercase',
-    }}>{children}</div>
   )
 }

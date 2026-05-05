@@ -1,6 +1,6 @@
 import React from 'react'
 import { T } from '../shared.jsx'
-import { APPT_STATUS } from './citaModal.jsx'
+import { APPT_STATUS } from './citaModal'
 import { statusStyle } from './_shared.jsx'
 
 export default function StatusFilterBar({ statusFilter, onToggle, showCancelled, onToggleCancelled }) {
