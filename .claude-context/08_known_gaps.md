@@ -148,23 +148,33 @@ Future work: extract `useCitaForm()` hook to encapsulate save/delete
 pipelines and form state, collapse the PatientPicker prop interface to
 a single `form` object. Non-mechanical, deferred until Phase B or later.
 
+### 16. Extract editor save hook from professionals (2026-05-04)
+
+`src/screens/professionals/professionalEditor.jsx` orchestrator is ~470
+lines after Phase A split, dominated by `syncSchedules` (insert/update/
+delete diff for schedules) + `syncOffered` (insert/update/delete diff
+for session_types) + `handleSave` (~144 lines combined).
+
+Future work: `useProfessionalEditor()` hook to encapsulate the save
+pipeline + state diffing. Non-mechanical, deferred until Phase B or later.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 16. Mercado Pago payment integration
+### 17. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 17. Onboard Centro Vitalis as first paying client
+### 18. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 18. Build dashboards in order of priority
+### 19. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link
