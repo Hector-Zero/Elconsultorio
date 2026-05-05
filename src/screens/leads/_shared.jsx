@@ -57,3 +57,43 @@ export function LeadAvatar({ lead, size = 36 }) {
     }}>{display}</div>
   )
 }
+
+// ── Date helper ──────────────────────────────────────────────────────
+
+export const timeAgo = (iso) => {
+  const d = new Date(iso)
+  const now = new Date()
+  const mins = Math.round((now - d) / 60000)
+  if (mins < 1) return 'ahora'
+  if (mins < 60) return `hace ${mins} min`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `hace ${hrs} h`
+  return `hace ${Math.round(hrs / 24)} d`
+}
+
+// ── Status config + pill ─────────────────────────────────────────────
+
+const STATUS = {
+  potencial:  { label: 'Potencial',  color: T.potencial,  soft: T.potencialSoft,  desc: 'Conversando con el bot' },
+  confirmado: { label: 'Confirmado', color: T.confirmado, soft: T.confirmadoSoft, desc: 'Cita agendada' },
+}
+
+export const StatusPill = ({ status, size = 'md' }) => {
+  const s = STATUS[status]
+  if (!s) return null
+  const sz = size === 'sm'
+    ? { fs: 10.5, py: 2, px: 7, dot: 5 }
+    : { fs: 11,   py: 3, px: 8, dot: 6 }
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: `${sz.py}px ${sz.px}px`,
+      borderRadius: 999,
+      background: s.soft, color: s.color,
+      fontSize: sz.fs, fontWeight: 500, letterSpacing: 0.1, whiteSpace: 'nowrap',
+    }}>
+      <span style={{ width: sz.dot, height: sz.dot, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+      {s.label}
+    </span>
+  )
+}

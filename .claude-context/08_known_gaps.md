@@ -130,6 +130,27 @@ files screen Ficha clínica. files.jsx split is already deferred from
 Phase A to Phase B; this fix can land alongside that refactor or as
 a standalone bugfix before then.
 
+### 26. Three overlapping status taxonomies (2026-05-05)
+
+The codebase has three independent status taxonomies that don't agree:
+
+1. `appointments.status` — `pending_payment` / `confirmed` / `completed`
+   / `cancelled` / `no_show` (per Phase 2 booking flow)
+2. `leads.qualified_lead` — boolean (per bot qualification logic)
+3. `STATUS` dict in `leads/_shared.jsx` — `potencial` / `confirmado`,
+   used only by `StatusPill` to render leads via a `statusOf(lead)`
+   helper that derives from a third source
+
+`StatusPill` displays the third taxonomy (`potencial`/`confirmado`)
+even though the underlying lead row exposes neither field directly.
+The mapping happens implicitly in `leads/_shared.jsx`'s `statusOf`.
+
+Fix: consolidate to one source of truth for lead status. Likely either
+extend `qualified_lead` boolean into a proper enum on the leads table,
+or formalize the `statusOf` mapping with documentation. Should be
+resolved before Vitalis goes live to avoid confusing the centro staff
+who'll see the dashboard.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
@@ -233,23 +254,48 @@ Fix: audit the 2-column grid wrapper; ensure list panel has `min-height: 0`
 and `overflow: auto` on the right element. Pattern-match against QuickPanel
 which already scrolls correctly.
 
+### 25. STATUS dict color-snapshot fragility (2026-05-05)
+
+`STATUS` (now in `src/screens/leads/_shared.jsx` after Phase A target #7
+demotion) is initialized at module-load time with snapshot references
+to `T.potencial`/`T.potencialSoft`/etc. After `applyTheme` mutates `T`,
+those keys aren't currently overwritten — so STATUS happens to render
+correct colors by accident, not by design. If a future theme adds
+`potencial`/`confirmado` color overrides, STATUS will render with stale
+colors.
+
+Fix: either compute STATUS dynamically (function call instead of dict
+literal) or have applyTheme rebuild STATUS after mutating T. Low priority
+until a theme actually overrides those keys.
+
+### 27. Sidebar reads undocumented clients.config.modules (2026-05-05)
+
+`Sidebar` in `src/screens/shared.jsx` reads `ctx?.config?.modules` to
+filter which sidebar items are visible (module-based access control).
+This `modules` field on `clients.config` (jsonb) is not documented in
+`02_database_schema.md` or anywhere in `.claude-context/`.
+
+Fix: document the expected shape and allowed values of
+`clients.config.modules`. If the field is unused/legacy, remove the
+filter from Sidebar.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 22. Mercado Pago payment integration
+### 28. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 23. Onboard Centro Vitalis as first paying client
+### 29. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 24. Build dashboards in order of priority
+### 30. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link

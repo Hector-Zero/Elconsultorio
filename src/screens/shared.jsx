@@ -161,46 +161,7 @@ export const Icon = ({ name, size = 16, stroke = 'currentColor', fill = 'none' }
   )
 }
 
-// ───────────── status config ─────────────
-export const STATUS = {
-  potencial:  { label: 'Potencial',  color: T.potencial,  soft: T.potencialSoft,  desc: 'Conversando con el bot' },
-  confirmado: { label: 'Confirmado', color: T.confirmado, soft: T.confirmadoSoft, desc: 'Cita agendada' },
-}
-
-// ───────────── sample data (replaced by Supabase in Steps 3–6) ─────────────
-export const SAMPLE_LEADS = [
-  { chat_id: '56987412033', prospect_name: 'María José Fernández', prospect_phone: '+56 9 8741 2033', message_count: 14, phase: 'Agendamiento', status: 'confirmado', last_updated: '2026-04-23T10:42:00', conversation_context: 'Profesional, 34 años, consulta por ansiedad laboral recurrente. Ha tenido terapia previa hace 3 años. Busca atención en la tarde, de preferencia miércoles o viernes. Cobertura Isapre Colmena.', appointment: { date: '2026-04-25', time: '18:00' }, tags: ['Ansiedad', 'Isapre'], unread: 0, newMessage: false },
-  { chat_id: '56976245118', prospect_name: 'Cristóbal Rojas', prospect_phone: '+56 9 7624 5118', message_count: 9, phase: 'Calificando', status: 'potencial', last_updated: '2026-04-23T10:58:00', conversation_context: 'Hombre, 28 años, derivado por su médico general. Primera vez en terapia. Menciona estrés y problemas de sueño desde cambio de trabajo. Disponibilidad flexible. Paga particular.', tags: ['Estrés', 'Particular', 'Primera vez'], unread: 2, newMessage: true },
-  { chat_id: '56945782910', prospect_name: 'Javiera Soto', prospect_phone: '+56 9 4578 2910', message_count: 6, phase: 'Calificando', status: 'potencial', last_updated: '2026-04-23T09:15:00', conversation_context: 'Estudiante universitaria, 22 años. Consulta por estado de ánimo bajo y dificultad para concentrarse en periodo de exámenes. Vive con padres. Busca sesiones semanales en línea.', tags: ['Depresión', 'Online', 'Estudiante'], unread: 0, newMessage: false },
-  { chat_id: '56968223471', prospect_name: 'Antonia Valdés', prospect_phone: '+56 9 6822 3471', message_count: 11, phase: 'Agendamiento', status: 'confirmado', last_updated: '2026-04-22T19:20:00', conversation_context: 'Madre de familia, 41 años. Dificultades en la crianza adolescente. Confirmó sesión para jueves 17h. Prefiere presencial. Providencia.', appointment: { date: '2026-04-24', time: '17:00' }, tags: ['Parental', 'Presencial'], unread: 0, newMessage: false },
-  { chat_id: '56987660421', prospect_name: 'Catalina Muñoz', prospect_phone: '+56 9 8766 0421', message_count: 18, phase: 'Agendamiento', status: 'potencial', last_updated: '2026-04-23T11:02:00', conversation_context: 'Profesora, 36 años. Interesada en terapia de pareja. Está coordinando con su pareja para encontrar horario compartido. Cobertura Fonasa tramo C.', tags: ['Pareja', 'Fonasa'], unread: 1, newMessage: true },
-  { chat_id: '56971203344', prospect_name: 'Francisca Leiva', prospect_phone: '+56 9 7120 3344', message_count: 7, phase: 'Calificando', status: 'potencial', last_updated: '2026-04-23T10:20:00', conversation_context: 'Ingeniera, 29 años. Consulta por duelo tras fallecimiento reciente. Terapia previa positiva. Horario preferido: mañanas.', tags: ['Duelo', 'Particular'], unread: 0, newMessage: false },
-  { chat_id: '56923104556', prospect_name: 'Diego Navarro', prospect_phone: '+56 9 2310 4556', message_count: 3, phase: 'Primer contacto', status: 'potencial', last_updated: '2026-04-23T08:30:00', conversation_context: 'Consulta inicial por recomendación de un amigo. Aún no ha respondido las preguntas de calificación.', tags: ['Referido'], unread: 0, newMessage: false },
-  { chat_id: '56999112034', prospect_name: 'Matías Pérez', prospect_phone: '+56 9 9911 2034', message_count: 2, phase: 'Primer contacto', status: 'potencial', last_updated: '2026-04-22T14:05:00', conversation_context: 'Primer mensaje anoche. Preguntó precios. No ha respondido desde que el bot envió información.', tags: [], unread: 0, newMessage: false },
-]
-
-export const SAMPLE_PATIENTS = [
-  { id: 'p1', name: 'Valentina Torres',  phone: '+56 9 8234 1190', rut: '17.234.567-8', since: '2024-03-11', sessions: 18, next: '2026-04-24 10:00', status: 'al día',    balance: 0,     tags: ['Ansiedad'] },
-  { id: 'p2', name: 'Rodrigo Ávila',     phone: '+56 9 6611 2048', rut: '13.998.221-4', since: '2023-09-02', sessions: 42, next: '2026-04-25 16:00', status: 'al día',    balance: 0,     tags: ['TEPT'] },
-  { id: 'p3', name: 'Isidora Reyes',     phone: '+56 9 4455 8820', rut: '19.445.110-9', since: '2025-01-14', sessions: 11, next: '2026-04-23 17:30', status: 'pendiente', balance: 45000, tags: ['Duelo'] },
-  { id: 'p4', name: 'Benjamín Silva',    phone: '+56 9 7712 0044', rut: '16.778.334-1', since: '2024-11-08', sessions: 14, next: null,                status: 'pausado',   balance: 0,     tags: ['Pareja'] },
-  { id: 'p5', name: 'Camila Aguirre',    phone: '+56 9 5523 9911', rut: '18.112.558-6', since: '2025-07-22', sessions: 6,  next: '2026-04-26 11:00', status: 'al día',    balance: 0,     tags: ['Depresión'] },
-  { id: 'p6', name: 'Joaquín Mella',     phone: '+56 9 3344 7760', rut: '15.338.902-K', since: '2023-05-19', sessions: 56, next: '2026-04-28 09:00', status: 'al día',    balance: 0,     tags: ['Crónico'] },
-  { id: 'p7', name: 'Paula Vergara',     phone: '+56 9 6190 3321', rut: '20.041.556-2', since: '2026-02-03', sessions: 4,  next: '2026-04-24 18:00', status: 'pendiente', balance: 90000, tags: ['Primera vez'] },
-]
-
 // ───────────── helpers ─────────────
-export const timeAgo = (iso) => {
-  const d = new Date(iso)
-  const now = new Date()
-  const mins = Math.round((now - d) / 60000)
-  if (mins < 1) return 'ahora'
-  if (mins < 60) return `hace ${mins} min`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `hace ${hrs} h`
-  return `hace ${Math.round(hrs / 24)} d`
-}
-
 export const initials = (name) => {
   return (name ?? '').trim().split(/\s+/).slice(0, 2).map(s => s[0] ?? '').join('').toUpperCase() || '?'
 }
@@ -342,26 +303,6 @@ export const Avatar = ({ name, size = 36 }) => (
   }}>{initials(name)}</div>
 )
 
-export const StatusPill = ({ status, size = 'md' }) => {
-  const s = STATUS[status]
-  if (!s) return null
-  const sz = size === 'sm'
-    ? { fs: 10.5, py: 2, px: 7, dot: 5 }
-    : { fs: 11,   py: 3, px: 8, dot: 6 }
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: `${sz.py}px ${sz.px}px`,
-      borderRadius: 999,
-      background: s.soft, color: s.color,
-      fontSize: sz.fs, fontWeight: 500, letterSpacing: 0.1, whiteSpace: 'nowrap',
-    }}>
-      <span style={{ width: sz.dot, height: sz.dot, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-      {s.label}
-    </span>
-  )
-}
-
 export const TopBar = ({ title, subtitle, right }) => (
   <>
     <div style={{
@@ -387,7 +328,7 @@ export const TopBar = ({ title, subtitle, right }) => (
   </>
 )
 
-export function OnboardingBanner() {
+function OnboardingBanner() {
   const ctx = useContext(ClientCtx)
   const [dismissed, setDismissed] = useState(() => {
     try { return sessionStorage.getItem('onb_profile_dismissed') === '1' } catch { return false }
@@ -437,82 +378,6 @@ export const btn = (variant) => {
   if (variant === 'ghostSm') return { ...base, background: 'transparent', color: T.inkSoft, padding: '6px 8px' }
   if (variant === 'accent')  return { ...base, background: T.accent, color: T.primaryText }
   return base
-}
-
-export function TimePicker({ value, minTime, onChange, hourRange = [8, 20] }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  const [h, m] = (value || '10:00').split(':')
-  const [hStart, hEnd] = hourRange
-  const hours   = Array.from({ length: hEnd - hStart + 1 }, (_, i) => String(hStart + i).padStart(2, '0'))
-  const minutes = ['00', '15', '30', '45']
-
-  useEffect(() => {
-    if (!open) return
-    const fn = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
-    window.addEventListener('mousedown', fn)
-    return () => window.removeEventListener('mousedown', fn)
-  }, [open])
-
-  const isDisabled = (nh, nm) => !!minTime && `${nh}:${nm}` < minTime
-  function pick(nh, nm) {
-    if (isDisabled(nh, nm)) return
-    onChange(`${nh}:${nm}`)
-  }
-
-  const inputStyle = {
-    padding: '10px 12px', borderRadius: 8,
-    border: `1px solid ${T.line}`, background: T.bg,
-    fontSize: 13, color: T.ink, width: '100%', outline: 'none',
-    fontFamily: T.sans, boxSizing: 'border-box',
-    textAlign: 'left', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  }
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" onClick={() => setOpen(o => !o)} style={inputStyle}>
-        <span style={{ fontFamily: T.mono }}>{value}</span>
-        <Icon name="clock" size={13} stroke={T.inkMuted} />
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 60,
-          background: T.bgRaised, border: `1px solid ${T.line}`,
-          borderRadius: 10, boxShadow: '0 8px 24px rgba(20,18,14,0.18)',
-          padding: 6, display: 'flex', gap: 4,
-        }}>
-          <TimeColumn items={hours}   value={h} onPick={(v) => pick(v, m)} disabled={(v) => isDisabled(v, m)} />
-          <TimeColumn items={minutes} value={m} onPick={(v) => pick(h, v)} disabled={(v) => isDisabled(h, v)} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TimeColumn({ items, value, onPick, disabled }) {
-  return (
-    <div style={{
-      maxHeight: 180, overflowY: 'auto',
-      display: 'flex', flexDirection: 'column', gap: 2,
-      minWidth: 60, padding: 2,
-    }}>
-      {items.map(it => {
-        const sel = it === value
-        const dis = disabled?.(it)
-        return (
-          <button key={it} type="button" onClick={() => onPick(it)} disabled={dis} style={{
-            border: 'none', cursor: dis ? 'not-allowed' : 'pointer',
-            padding: '7px 14px', borderRadius: 6,
-            background: sel ? T.primary : 'transparent',
-            color: sel ? T.primaryText : (dis ? T.inkFaint : T.ink),
-            fontFamily: T.mono, fontSize: 13, fontWeight: sel ? 600 : 400,
-            textAlign: 'center',
-          }}>{it}</button>
-        )
-      })}
-    </div>
-  )
 }
 
 // ───────────── confirm modal (replaces native window.confirm) ─────────────

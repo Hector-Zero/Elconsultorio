@@ -1,9 +1,9 @@
 import React, { useState, useContext } from 'react'
-import { T, Icon, btn, SectionLabel, TimePicker, initials, PRO_COLORS } from '../shared.jsx'
+import { T, Icon, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
-import { DAYS, DEFAULT_AVAILABILITY, Field2, SmallToggle, SettingsHeader, textInput, formatRut } from './_shared.jsx'
+import { DAYS, DEFAULT_AVAILABILITY, Field2, SmallToggle, SettingsHeader, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 export default function EmpresaWizard({ onCancel, onActivated }) {
   const { clientId, config, setConfig } = useContext(ClientCtx)

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react'
-import { T, Icon, btn, SectionLabel, avatarTint, avatarInk, TimePicker, initials, PRO_COLORS } from '../shared.jsx'
+import { T, Icon, btn, SectionLabel, avatarTint, avatarInk, initials, PRO_COLORS } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
-import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut } from './_shared.jsx'
+import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 // ───── Profile — wired to clients.config (primary_color, resend_from, avatar_url, session_types) ─────
 const DEFAULT_SESSION_TYPES = [

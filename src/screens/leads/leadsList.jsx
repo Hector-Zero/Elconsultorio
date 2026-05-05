@@ -1,6 +1,6 @@
 import React from 'react'
-import { T, Icon, StatusPill, btn, timeAgo } from '../shared.jsx'
-import { statusOf, nameOf, phoneOf, leadDisplayName, excerpt, LeadAvatar, COL_DEFS } from './_shared.jsx'
+import { T, Icon, btn } from '../shared.jsx'
+import { statusOf, nameOf, phoneOf, leadDisplayName, excerpt, LeadAvatar, COL_DEFS, StatusPill, timeAgo } from './_shared.jsx'
 
 export default function LeadsList({
   listRef,

@@ -1,5 +1,5 @@
-import React from 'react'
-import { T } from '../shared.jsx'
+import React, { useState, useEffect, useRef } from 'react'
+import { T, Icon } from '../shared.jsx'
 
 // ───── Legacy availability shape ─────
 // Used by ProfileSettings + PerfilDisponibilidad + EmpresaWizard to write the
@@ -110,4 +110,82 @@ export const textInput = {
   border: `1px solid ${T.line}`, background: T.bg,
   fontSize: 13, color: T.ink, width: '100%', outline: 'none',
   fontFamily: T.sans, boxSizing: 'border-box',
+}
+
+// ───── Time picker ─────
+
+export function TimePicker({ value, minTime, onChange, hourRange = [8, 20] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const [h, m] = (value || '10:00').split(':')
+  const [hStart, hEnd] = hourRange
+  const hours   = Array.from({ length: hEnd - hStart + 1 }, (_, i) => String(hStart + i).padStart(2, '0'))
+  const minutes = ['00', '15', '30', '45']
+
+  useEffect(() => {
+    if (!open) return
+    const fn = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    window.addEventListener('mousedown', fn)
+    return () => window.removeEventListener('mousedown', fn)
+  }, [open])
+
+  const isDisabled = (nh, nm) => !!minTime && `${nh}:${nm}` < minTime
+  function pick(nh, nm) {
+    if (isDisabled(nh, nm)) return
+    onChange(`${nh}:${nm}`)
+  }
+
+  const inputStyle = {
+    padding: '10px 12px', borderRadius: 8,
+    border: `1px solid ${T.line}`, background: T.bg,
+    fontSize: 13, color: T.ink, width: '100%', outline: 'none',
+    fontFamily: T.sans, boxSizing: 'border-box',
+    textAlign: 'left', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={inputStyle}>
+        <span style={{ fontFamily: T.mono }}>{value}</span>
+        <Icon name="clock" size={13} stroke={T.inkMuted} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 60,
+          background: T.bgRaised, border: `1px solid ${T.line}`,
+          borderRadius: 10, boxShadow: '0 8px 24px rgba(20,18,14,0.18)',
+          padding: 6, display: 'flex', gap: 4,
+        }}>
+          <TimeColumn items={hours}   value={h} onPick={(v) => pick(v, m)} disabled={(v) => isDisabled(v, m)} />
+          <TimeColumn items={minutes} value={m} onPick={(v) => pick(h, v)} disabled={(v) => isDisabled(h, v)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TimeColumn({ items, value, onPick, disabled }) {
+  return (
+    <div style={{
+      maxHeight: 180, overflowY: 'auto',
+      display: 'flex', flexDirection: 'column', gap: 2,
+      minWidth: 60, padding: 2,
+    }}>
+      {items.map(it => {
+        const sel = it === value
+        const dis = disabled?.(it)
+        return (
+          <button key={it} type="button" onClick={() => onPick(it)} disabled={dis} style={{
+            border: 'none', cursor: dis ? 'not-allowed' : 'pointer',
+            padding: '7px 14px', borderRadius: 6,
+            background: sel ? T.primary : 'transparent',
+            color: sel ? T.primaryText : (dis ? T.inkFaint : T.ink),
+            fontFamily: T.mono, fontSize: 13, fontWeight: sel ? 600 : 400,
+            textAlign: 'center',
+          }}>{it}</button>
+        )
+      })}
+    </div>
+  )
 }

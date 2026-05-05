@@ -1,6 +1,6 @@
 import React from 'react'
-import { T, Icon, btn, StatusPill, SectionLabel, timeAgo } from '../shared.jsx'
-import { leadDisplayName, phoneOf, LeadAvatar } from './_shared.jsx'
+import { T, Icon, btn, SectionLabel } from '../shared.jsx'
+import { leadDisplayName, phoneOf, LeadAvatar, StatusPill, timeAgo } from './_shared.jsx'
 
 // ── Detail panel ─────────────────────────────────────────────────────
 
