@@ -158,23 +158,35 @@ for session_types) + `handleSave` (~144 lines combined).
 Future work: `useProfessionalEditor()` hook to encapsulate the save
 pipeline + state diffing. Non-mechanical, deferred until Phase B or later.
 
+### 17. Extract leads list + state hook (2026-05-04)
+
+`src/screens/leads.jsx` shell is ~330 lines and `leads/leadsList.jsx`
+takes ~22 props after Phase A split. The list panel needs `useLeadsList()`
+(or split as `useLeadsState()` + `useResizableColumns()`) to encapsulate
+state + column geometry (ResizeObserver, ratio normalization, neighbor-pair
+resize, sort/filter pipeline).
+
+Future work: extract hook(s) to collapse the prop interface and isolate
+the resize logic for reuse. Non-mechanical, deferred until Phase B or
+later.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 17. Mercado Pago payment integration
+### 18. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 18. Onboard Centro Vitalis as first paying client
+### 19. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 19. Build dashboards in order of priority
+### 20. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link
