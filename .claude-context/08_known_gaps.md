@@ -78,6 +78,58 @@ approach. The dashboard might call it or surface it somewhere.
 - Update it to match the current architecture (call `get_bot_context` + Sonnet
   identically to Make.com path).
 
+### 18. Inconsistent ID routing for "Ver ficha" vs "Cobrar" buttons (2026-05-04)
+
+In `src/screens/patients/quickPanel.jsx` (post-split):
+- "Ver ficha" button → navigates to `files/<patient.id>`
+- "Cobrar" button → navigates to `billing/<lead_id>`
+
+In `src/screens/patients.jsx` shell (post-split):
+- List-row chevron → navigates to `files/<lead_id>` (inconsistent with quickPanel's "Ver ficha")
+
+`files.jsx` interprets its param as a UUID and falls back to first-patient-
+of-client when lookup fails, which masks the bug. Whether the two routes
+land on the same patient is non-deterministic depending on which ID lookup
+hits first.
+
+Fix: standardize on one ID type for the files route, update all three call
+sites consistently. Verify against `files.jsx` param handling.
+
+### 20. Schema/application drift on patients.status (2026-05-05)
+
+`patients.status` is documented in `02_database_schema.md` as
+`DEFAULT 'activo'` but every existing patient row uses `status='active'`
+(English). Application code writes `'active'`; the schema default is
+never used. The patients screen filters on `status='active'` somewhere
+(header count "X pacientes activos" matches the active-count exactly).
+
+Surfaced 2026-05-05 when test data seeded with the schema-documented value
+`'activo'` was silently filtered out of the list view despite the row
+being present in the database response. Hard to diagnose without devtools
+inspection.
+
+Audit: grep for `'active'` and `'activo'` in `src/`, settle on one value
+(English, given existing data), update schema default to match in a
+migration, backfill any drift.
+
+### 21. Files screen does not display clinical_notes (2026-05-05)
+
+In `src/screens/files.jsx`, the "Historial de sesiones" panel shows
+"Sin sesiones registradas" even when `clinical_notes` rows exist for
+the patient's active assignment. The QuickPanel on the patients screen
+displays the same notes correctly (queries `clinical_notes` by
+`assignment_id`).
+
+Likely cause: `files.jsx` queries clinical_notes via a different path
+(possibly by `patient_id`, which doesn't exist on the table per schema)
+or via an assignment lookup that's failing/missing.
+
+Surfaced 2026-05-05 with Camila Reyes test data — same patient renders
+3 notes correctly in the patients QuickPanel and zero notes in the
+files screen Ficha clínica. files.jsx split is already deferred from
+Phase A to Phase B; this fix can land alongside that refactor or as
+a standalone bugfix before then.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
@@ -170,23 +222,34 @@ Future work: extract hook(s) to collapse the prop interface and isolate
 the resize logic for reuse. Non-mechanical, deferred until Phase B or
 later.
 
+### 19. Patients screen list panel is not scrollable (2026-05-05)
+
+In `src/screens/patients.jsx` (post-Phase-A split), the patient list panel
+(left side of 2-column grid) does not scroll when content overflows the
+viewport. Surfaced 2026-05-05 with 13+ patients on a 13" screen — rows
+beyond the fold are inaccessible without using the search box.
+
+Fix: audit the 2-column grid wrapper; ensure list panel has `min-height: 0`
+and `overflow: auto` on the right element. Pattern-match against QuickPanel
+which already scrolls correctly.
+
 ---
 
 ## PHASE 3 — Major future work
 
-### 18. Mercado Pago payment integration
+### 22. Mercado Pago payment integration
 
 Wire payment links into the booking confirmation. After Sonnet's "...le
 compartiré el link de pago...", actually generate and send a Mercado Pago link
 keyed to that appointment. Confirm payment via webhook → mark appointment
 `status='confirmed'`.
 
-### 19. Onboard Centro Vitalis as first paying client
+### 23. Onboard Centro Vitalis as first paying client
 
 Provide branding, configure professionals/services/schedules, train staff on
 dashboard, set up Telegram bot.
 
-### 20. Build dashboards in order of priority
+### 24. Build dashboards in order of priority
 
 a. Professional dashboard — view their own appointments, mark notes
 b. Public URL — patient-facing centro page with professional bios, booking link
