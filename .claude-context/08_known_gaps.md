@@ -301,6 +301,46 @@ the booking flow, the schema, and possibly the patient ficha (for the
 pre-session comment). Plan it as one architectural session, not
 piecemeal.
 
+### 38. billing/... routes use lead_id while files/... uses patient_id (2026-05-05)
+
+Two call sites navigate to `billing/...`:
+- `src/screens/patients/quickPanel.jsx:243` — "Cobrar" button passes
+  `p.lead_id`
+- `src/screens/files.jsx:271` — passes `patient.lead_id`
+
+The two call sites are internally consistent with each other but
+inconsistent with the `files/...` contract (which now uses
+`patient_id` post item 18). The billing screen's URL parameter
+parsing currently expects `lead_id`.
+
+Decision needed: should `billing/...` migrate to `patient_id` for
+consistency, or stay on `lead_id`? Arguments either direction:
+
+- For `patient_id`: matches `files/...` contract, clinical resources
+  keyed by patient identity. Patient may have multiple invoices
+  spanning multiple leads if rebooked from new lead conversation.
+- For `lead_id`: invoices are often generated from the booking flow
+  which is naturally lead-scoped. The current code may rely on
+  lead-keyed lookups for unpaid-invoice surfacing.
+
+Surfaced 2026-05-05 during item 18 work. Tackle as a focused
+normalization task once billing flows are otherwise stable.
+
+### 39. Stub "Crear ficha" button in leads/detailPanel.jsx (2026-05-05)
+
+Single match in `src/screens/leads/detailPanel.jsx:31` — a button
+labeled "Crear ficha" with no `onClick` handler. Does nothing when
+clicked.
+
+Per item 37 (lead lifecycle separation), the conversion from lead to
+patient is now intended to be automatic when an appointment is
+created, not manually triggered from the leads screen. This stub
+button should be removed entirely as part of item 37's scope, or
+earlier if a leads-screen pass happens before the bot polish session.
+
+Already partially flagged in Phase A "Observed during refactor (not
+fixed)" notes.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
