@@ -6,7 +6,7 @@ Tracked in priority order. Update as items are added, resolved, or re-prioritize
 
 ## ⚠️ HIGH PRIORITY — Must do before Vitalis goes live
 
-### 1. Bot can accidentally reschedule (double booking)
+### 1. Bot can accidentally reschedule (double booking) **[PHASE B / DEFERRED]**
 
 **Problem:** When a patient asks to change an existing booking, the bot may create a NEW booking for the new slot while leaving the original active. Patient thinks they rescheduled; reality is they have two appointments. The bot has even verbally confirmed "queda confirmado el cambio" without firing any DB action in some cases.
 
@@ -32,6 +32,82 @@ along with other low-volume-risk items.
 
 **Long-term fix:** Build a `cancel_booking` Edge Function. Extend the bot to
 detect reschedule intent explicitly via Haiku and orchestrate cancel + book.
+
+**Status update 2026-05-05:** Major rewrite drafted and partially applied
+during 2026-05-05 session. Prompt save behavior, prompt cache invalidation,
+and Make.com flow integration all proved more entangled than expected.
+Multiple test conversations revealed the prompt+flow stack needs to be
+treated as a single architectural unit, not as separate prompt edits.
+Re-scoped: deferred to a future dedicated session that addresses bot
+holistically alongside system prompt, Haiku prompt, Make.com flow, and
+Edge Function. Current production prompt is still functional for ~80% of
+booking flows; the failure modes are tracked in items below.
+
+### 31. Bot says "queda reservada" without booking actually firing (2026-05-05) **[PHASE B / DEFERRED]**
+
+The conversational bot layer says "Estupendo, su cita queda reservada..."
+based on its own perception of conversation completeness. The Make.com
+ready_to_book filter is a separate gate that determines whether the
+Edge Function actually runs. When they disagree (e.g., when Haiku saves
+a malformed `patient_email`), the filter rejects the booking but the
+patient sees a confirmation message anyway.
+
+Architectural fix: the success-route Telegram modules should send a
+templated success message AFTER the Edge Function returns 200, not
+relay the bot's own text. The bot should generate intent-only language
+("Procesando su reserva...") and the system generates the actual
+"queda reservada" message.
+
+Defer until dedicated bot polish session. Do not fix piecemeal.
+
+### 32. Haiku Markdown autolink stripping rule not effective (2026-05-05) **[PHASE B / DEFERRED]**
+
+The `patient_email` rule in module 8 and module 19 was updated to
+strip Markdown autolink syntax like `[user@example.cl](mailto:user@example.cl)`.
+Two test conversations after the update still produced
+`[maria@masha.cl](mailto:maria@masha.cl)` in `pending_booking_data.patient_email`.
+Either the rule did not save in Make.com, or Haiku is interpreting
+the autolink as a valid email-like string and ignoring the strip
+instruction.
+
+Defer until dedicated bot polish session. Verify rule is actually
+saved by reading module 8 and module 19 prompt content directly.
+
+### 33. Bot conversation state lost mid-flow when age question fires (2026-05-05) **[PHASE B / DEFERRED]**
+
+When the bot triggers the Section 8 paso 4 age question (intended for
+infanto-juvenil bookings only), the conversation loses track of the
+agreed slot/professional and re-shows the entire availability list,
+forcing the patient to pick again. Two things compound: (1) the age
+question fires for adult bookings (paso 4 not properly gated to minor
+indication), (2) after the age answer, the bot has no clear "next step"
+rule and defaults to re-listing availability.
+
+Defer until dedicated bot polish session.
+
+### 34. Patient row duplication on booking flow (2026-05-05)
+
+The `create-booking` Edge Function creates `patients` rows without
+deduplication on `(client_id, lead_id)` or `(client_id, rut)`. Combined
+with `patients.jsx` auto-create logic that creates lead-linked rows
+when the dashboard loads, this produces duplicate patient rows for the
+same person.
+
+Two fixes needed:
+1. Edge Function should set `lead_id` on patient INSERT and dedupe
+2. Dashboard auto-create should dedupe on `(client_id, lead_id)` AND
+   `(client_id, full_name)` before inserting
+
+Tier 2 dashboard work — addressable independently from bot.
+
+### 35. usage_log not capturing token counts (2026-05-05) **[PHASE B / DEFERRED]**
+
+`input_tokens`, `output_tokens`, `cache_read_tokens`, and
+`cache_creation_tokens` all return null for recent Anthropic API calls
+in `usage_log`. Either the writer is not extracting fields from the
+API response correctly, or Make.com is not passing them through.
+
+Cache analytics unusable until fixed. Defer until bot polish session.
 
 ---
 
@@ -198,7 +274,7 @@ deploy SPA to Vercel, set up DNS.
 
 Both pre-date the refactor; flagging for cleanup pass.
 
-### 14. Extract data hook from agenda.jsx shell (2026-05-04)
+### 14. Extract data hook from agenda.jsx shell (2026-05-04) **[PHASE B / DEFERRED]**
 
 `src/screens/agenda.jsx` shell is ~500 lines after Phase A split. Most of
 that is JSX layout plus a single data-loading useEffect that combines:
@@ -208,7 +284,7 @@ professional fetching, schedule hydration, appointment query, patient
 Future work: extract `useAgendaData()` hook to encapsulate the effect,
 trim shell toward ~300. Non-mechanical, deferred until Phase B or later.
 
-### 15. Extract save/form hook from citaModal (2026-05-04)
+### 15. Extract save/form hook from citaModal (2026-05-04) **[PHASE B / DEFERRED]**
 
 `src/screens/agenda/citaModal/index.jsx` shell is ~575 lines after Phase A
 split. The bulk is `performSave` (~175 lines: validation, past/off-schedule
@@ -221,7 +297,7 @@ Future work: extract `useCitaForm()` hook to encapsulate save/delete
 pipelines and form state, collapse the PatientPicker prop interface to
 a single `form` object. Non-mechanical, deferred until Phase B or later.
 
-### 16. Extract editor save hook from professionals (2026-05-04)
+### 16. Extract editor save hook from professionals (2026-05-04) **[PHASE B / DEFERRED]**
 
 `src/screens/professionals/professionalEditor.jsx` orchestrator is ~470
 lines after Phase A split, dominated by `syncSchedules` (insert/update/
@@ -231,7 +307,7 @@ for session_types) + `handleSave` (~144 lines combined).
 Future work: `useProfessionalEditor()` hook to encapsulate the save
 pipeline + state diffing. Non-mechanical, deferred until Phase B or later.
 
-### 17. Extract leads list + state hook (2026-05-04)
+### 17. Extract leads list + state hook (2026-05-04) **[PHASE B / DEFERRED]**
 
 `src/screens/leads.jsx` shell is ~330 lines and `leads/leadsList.jsx`
 takes ~22 props after Phase A split. The list panel needs `useLeadsList()`
@@ -311,3 +387,13 @@ When an item moves status, update this file:
 - ❌ Cancelled: keep entry, mark cancelled with reason
 
 When new items emerge, add them in the appropriate priority section.
+
+---
+
+## RECOMMENDED ORDER OF EXECUTION
+
+Tier 1 (next): items 20, 19, 18, 21
+Tier 2: appointments.duration default, drop closing_question column, patient dedup (Edge Function + dashboard)
+Tier 3: dead code cleanup PR, then Phase B hook extraction (14-17)
+Tier 4: Phase 3 features (28-30)
+Tier 5: bot polish session — addressed holistically as architectural work, not piecemeal
