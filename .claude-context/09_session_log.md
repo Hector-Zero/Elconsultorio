@@ -4,6 +4,38 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
+## 2026-05-05 — Bot diagnostic session + strategic refocus
+
+Spent the session investigating GPT-4o fallback failures and Sonnet
+prompt regressions. Key findings:
+
+- GPT-4o branch was missing centro context in module 7's system block.
+  Mapper rewrite drafted, ready to apply but deferred.
+- Haiku's session_type extraction was capturing patient phrasing
+  ("terapia de pareja") instead of normalizing to centro's official
+  service names ("Consulta de pareja"). Caused validation failures.
+- System prompt rewrite drafted with REGLA DE APERTURA, 7-element
+  checklist in section 9, REGLA D no-reschedule rule. Applied but
+  multiple regressions surfaced: Sonnet bolding professional names,
+  age question misfiring, conversation state lost mid-flow.
+- Patient duplication bug found: dashboard auto-create logic in
+  patients.jsx + Edge Function INSERT both write patient rows
+  without deduplication.
+- usage_log not capturing token counts (cache analytics unusable).
+
+Decision at end of session: defer all bot work to a future dedicated
+session. The bot, prompts, Make.com flow, and Edge Function are too
+entangled to fix piecemeal between dashboard work. Strategic shift
+to dashboard-first: get Vitalis using Elconsultorio in manual mode
+(bot off), then return to bot as a Phase 2 add-on.
+
+Next priority: items 20 → 19 → 18 → 21 (patient flow integrity).
+Then Tier 2 cleanup. Bot polish session is Tier 5.
+
+No commits this session. Documentation updates only.
+
+---
+
 ## 2026-05-05 — Phase A complete: split the giants (6/6)
 
 **Outcome:** Six largest source files split into focused modules. Public
