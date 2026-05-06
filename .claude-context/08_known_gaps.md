@@ -143,6 +143,92 @@ Blocks future schema migrations from refreshing docs cleanly AND
 risks silent doc destruction by anyone unaware of the auth issue.
 Address before any further schema work.
 
+### 40. Capture all RLS policies and helper functions as version-controlled migrations (2026-05-05)
+
+The RLS helper functions (my_client_id, my_professional_id,
+is_admin_of_client, is_super_admin) and policies on clinical_notes,
+plus likely many other tables, exist only in the live Supabase
+database — never captured as migrations in supabase/migrations/.
+Surfaced repeatedly during item 21 diagnostics:
+`grep -rln "clinical_notes" supabase/migrations/` returns zero
+matches; same for the helper functions.
+
+Risk: the auth model is not reproducible. New environments
+(staging, recovery, new region, developer onboarding) would have
+tables but no security model. Anyone with credentials could read
+everything across all clients. Critical for a healthcare product.
+
+Fix scope: a focused session pulling all current policies and
+helper functions from the live database into version-controlled
+migrations. Best done as a baseline migration (or two: one for
+functions, one for policies) representing the current state.
+Future policy changes go through the migration system, not the
+dashboard SQL editor.
+
+This is foundation work — should be tackled before any further
+schema or RLS changes.
+
+### 41. Provision test professional auth account for end-to-end pro-mode testing (2026-05-05)
+
+The professional dashboard infrastructure already exists in code
+(App.jsx detects pro mode via professionals.user_id linkage,
+restricts nav to ['calendar', 'patients', 'settings'], and
+pro-specific RLS policies are written assuming this model). But
+there's no test professional auth account in the dev environment,
+so pro-mode flows are untested.
+
+Specific impact: item 21's clinical_notes write path cannot be
+smoke-tested without a professional account, because RLS
+correctly blocks admin writes (only treating professionals write
+clinical notes per the schema's intent and Chilean Ley 20.584).
+
+Fix scope: SQL provisioning to:
+1. Create an auth user (e.g., for one of the existing
+   Profesional 1/2/3 records)
+2. Set raw_user_meta_data with client_id and role appropriately
+3. Insert the matching public.users row (or verify the
+   handle_new_user trigger creates it)
+4. Update the professionals.user_id column to point to the new
+   auth user
+5. Verify professional auth context: log in as the user, confirm
+   pro mode loads, confirm the user can write clinical notes for
+   their assigned patients
+
+This unblocks: item 21 write-path verification, future
+per-professional duration testing (Tier 2), pre-launch validation
+that Vitalis's psychologists can actually use the system.
+
+Small task — likely under an hour including testing. Do this
+after the RLS-as-code work (item 40) so the policies are
+documented before testing them.
+
+### 42. Document the auth/role model in .claude-context/ (2026-05-05)
+
+The auth/role model is implemented across multiple disconnected
+places (useClient.js for slug→client_id resolution, App.jsx for
+professional detection, RLS helper functions for DB-side
+enforcement) but not documented anywhere in .claude-context/.
+Surfaced during item 21 diagnostics — Code had to discover the
+model by grep across the codebase rather than reading
+documentation.
+
+Fix scope: add a new section to 01_architecture.md (or a
+dedicated 04_auth_model.md) documenting:
+
+- How client_id resolution works (URL slug → clients.id via
+  useClient.js)
+- How professional vs admin mode is determined (App.jsx checking
+  professionals.user_id)
+- How RLS enforces permissions (helper functions reading users +
+  professionals tables)
+- The two-system gotcha: URL slug must match users.client_id or
+  queries silently return nothing
+- The handle_new_user trigger behavior on auth user creation
+- The 3-screen pro nav restriction in App.jsx:113-119
+
+Couple this with item 40 (RLS-as-code) so the docs and the
+migrations cover the same ground.
+
 ---
 
 ## MEDIUM PRIORITY — Quality of life / robustness
@@ -360,6 +446,158 @@ earlier if a leads-screen pass happens before the bot polish session.
 
 Already partially flagged in Phase A "Observed during refactor (not
 fixed)" notes.
+
+### 43. AI summary card not displayed in ficha clínica + caching strategy (2026-05-05)
+
+The QuickPanel on the patients screen displays an AI-generated
+summary of the patient's clinical history. The full ficha clínica
+on files.jsx does not show this summary, even though it's the
+more clinical-context-rich view where the summary would be more
+useful.
+
+Caching consideration (per Hector 2026-05-05): the summary is
+currently cached after first load and only invalidated when a
+clinical note is added or updated. When the shared summary
+component is built, the cache should be shared between QuickPanel
+and files.jsx — if either screen updates a note, both screens see
+the refreshed summary. Don't build per-screen caches.
+
+Fix path: extract the summary rendering and fetch logic from
+QuickPanel into a shared component or hook (likely
+useClinicalSummary or ClinicalSummaryCard) with shared cache.
+Render in both QuickPanel and files.jsx. Coordinate with item
+14-17 hook extraction work in Phase B since the clinical_notes
+fetch is already a candidate for extraction.
+
+### 44. Ficha clínica session sort order toggle (2026-05-05)
+
+The Historial de sesiones in files.jsx sorts sessions in a fixed
+order (currently old to new based on session_date ascending). Add
+a toggle to let the user reverse the order — useful for
+psychologists who want to see the most recent session first when
+reviewing a patient.
+
+Small UX feature. Single comparator flip controlled by a useState
+toggle. Track for whenever a ficha-screen polish pass happens.
+
+### 45. Nueva sesión modal too sparse — needs richer field set (2026-05-05)
+
+Item 21's fix (Option A) removed the unfillable type and
+duration_minutes fields from SessionModal because the schema
+didn't persist them. The result is a modal with only Fecha and
+Notas, which is too spartan for real clinical use. A psychologist
+logging a session typically wants to record:
+
+- Fecha and Hora (when the session happened)
+- Tipo de sesión (was this Consulta individual? Pareja? Familiar?)
+- Profesional (which psychologist conducted it)
+- Notas (the clinical content)
+- Optional: pre-fill defaults from the patient's most common past
+  pattern
+
+This is a design decision, not a simple field addition. Three
+possible models:
+
+- Model A: "Nueva sesión" creates clinical_notes for an existing
+  past appointment. Modal becomes an appointment selector + notes
+  textarea. All other fields auto-fill from the appointment row.
+- Model B: "Nueva sesión" creates a free-form clinical record
+  without an appointment. Modal needs full field set including
+  type/professional/duration. Requires schema additions to
+  clinical_notes (or denormalized fields).
+- Model C: Hybrid — pre-fill from past appointment if user picks
+  one, allow manual entry otherwise.
+
+Decision needs to be made deliberately. Coordinate with the
+duration architecture work since the modal will need to read
+service-level duration once that lands.
+
+### 46. Centro-level feature toggles via clients.config.features JSON (2026-05-05)
+
+Architectural decision (2026-05-05): centro-level features
+(admin_can_view_clinical_notes, bot_telegram_enabled,
+bot_intraweb_enabled, etc.) are stored in clients.config.features
+as a JSON object. Toggles are SUPERADMIN-CONTROLLED — centros
+consume the decisions but cannot change them in their own
+dashboard. RLS policies and feature gates read from this JSON.
+
+Defaults are restrictive (off). Features are explicitly granted
+by the platform operator, never auto-enabled.
+
+First toggle to implement: admin_can_view_clinical_notes
+(READ-ONLY admin access to clinical notes for centros where the
+platform operator has determined the centro qualifies — e.g.,
+admin is also a licensed professional, or centro has appropriate
+consent flows). Update notes_admin_with_consent policy to read
+from this toggle instead of per-patient consent flags.
+
+Until the superadmin dashboard UI exists (Phase 3), toggles are
+flipped via direct SQL UPDATEs on clients.config.
+
+Implementation order:
+1. Define the features JSON schema in clients.config (just
+   documentation; no migration needed since clients.config
+   already exists)
+2. Update RLS policies that need to read toggles
+3. Eventually build the superadmin dashboard UI to manage them
+   visually
+
+This depends on item 40 (RLS-as-code) being done first so the
+new policies are properly version-controlled.
+
+### 47. Certificado de atención feature implementation (2026-05-05)
+
+The "Certificado de atención" button at files.jsx:248 is a stub
+with no onClick handler. Per Hector 2026-05-05, this is a
+placeholder for a planned feature: instant generation of an
+attendance certificate from patient information. Not currently
+implemented but explicitly intended for future work.
+
+Distinct from the now-removed "Exportar PDF" button (which was
+unplanned dead UI). This stub stays as a UI placeholder for the
+planned feature.
+
+Fix path: implement the certificate generation flow. Likely
+involves:
+
+- A template document with placeholders (patient name, RUT,
+  sessions attended, professional, dates, etc.)
+- A PDF generation library (jsPDF, pdf-lib, or server-side via
+  Edge Function)
+- Form to capture optional fields the certificate may need
+  (purpose, recipient, etc.)
+- Download or email the generated PDF
+
+Track as a planned-not-implemented feature, not a stub-cleanup
+target.
+
+### 48. Smart defaults in Nueva sesión modal (2026-05-05)
+
+When a psychologist clicks "Nueva sesión" for an existing patient,
+the modal should pre-fill:
+
+- Fecha: today's date (already done)
+- Tipo de sesión: the patient's most common past session type
+- Profesional: the active assignment's professional
+- Hora: current time rounded to nearest valid slot
+
+Reduces typing burden for the common case (logging a session with
+the same professional/type as before). Can fall back to empty if
+the patient has no past sessions.
+
+Depends on item 45 (richer modal) being designed first.
+
+### 49. Notes layout organization in ficha clínica (2026-05-05)
+
+Per Hector 2026-05-05 smoke testing observation: the Historial de
+sesiones notes display in files.jsx is "not well organized as the
+ficha." Specific concerns not yet identified — likely visual
+hierarchy, spacing, alignment, or grouping issues.
+
+Track for a future ficha-screen polish pass. Specific issues to be
+enumerated when that pass is scheduled. Coordinate with item 43
+(summary integration) and item 44 (sort toggle) since they're all
+ficha-screen UI work.
 
 ---
 
