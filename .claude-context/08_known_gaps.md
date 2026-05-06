@@ -378,6 +378,29 @@ foundational infrastructure that everything else assumes.
 
 Don't address now. Track for future hardening pass.
 
+### 56. RPC function migrations don't include explicit GRANT EXECUTE statements (2026-05-06)
+
+Surfaced during item 40 commit D drafting. Both
+create_booking_atomic and get_bot_context migrations create their
+respective functions but don't include explicit GRANT EXECUTE
+statements. Production has the right grants because Supabase's
+default ACLs apply automatically (anon/authenticated/service_role
+get EXECUTE on new public functions) plus PostgreSQL's built-in
+PUBLIC default. But this means future RPC function migrations
+could ship without explicit grants and still "work" in
+production, hiding the dependency on default ACLs.
+
+Coordinated with item 55 (default ACL not captured): if defaults
+ever change, every function in the codebase that relies on them
+silently fails permission checks.
+
+Fix path: establish a migration template/convention for new RPC
+functions that includes explicit GRANT EXECUTE statements
+alongside CREATE OR REPLACE FUNCTION. Audit existing RPC
+migrations and add the missing grants to make them robust against
+default ACL changes. Document in .claude-context/01_architecture.md
+or a new migration-conventions.md.
+
 ---
 
 ## MEDIUM PRIORITY — Quality of life / robustness
@@ -807,6 +830,55 @@ public.set_updated_at(). Behavioral test confirmed: updated_at on
 clinical_notes row 58aeea00-cfa6-4bb7-9a76-314794595642 moved
 from 2026-05-05 01:24:04 to 2026-05-06 22:41:26 after a no-op
 update.
+
+### 57. patients_professional_active_assignment is FOR ALL — allows professionals to modify patient identity fields (2026-05-06)
+
+The patients_professional_active_assignment policy is FOR ALL,
+allowing treating professionals to UPDATE patient identity fields
+(full_name, rut, email, phone, address, etc.) for any patient
+with an active assignment with them. This is similar in shape to
+gap 52 (appointments_professional_own DELETE).
+
+The clinical scope of a treating professional arguably shouldn't
+include modifying patient identity records — that's
+admin/receptionist territory. Identity changes (RUT correction,
+email update, address change) should typically be admin-managed.
+Professionals need read access for clinical context and possibly
+UPDATE on clinical-relevant fields (medication, diagnosis,
+notes), but full identity modification is broader than the role
+requires.
+
+Surfaced during item 40 commit C chunk 2 review (2026-05-06).
+
+Fix path: split the policy into separate concerns — SELECT for
+read access plus UPDATE limited to clinical fields (medication,
+diagnosis, notes-related columns). Identity fields stay
+admin-only. Coordinate with the broader admin/professional
+permission boundary work; this is similar in shape to the centro
+feature toggle pattern (item 46).
+
+### 58. users_admin_write is FOR ALL — admins can DELETE user rows (2026-05-06)
+
+The users_admin_write policy is FOR ALL, allowing admins to
+INSERT/UPDATE/DELETE rows in public.users. DELETE is included.
+This:
+
+- Doesn't delete the auth.users row (separate table managed by
+  Supabase Auth)
+- Does break the linkage between auth.users and public.users
+- Means the user can still authenticate but my_client_id()
+  returns null after deletion, effectively locking them out
+
+This may be intended behavior (admins can offboard users without
+going to the Auth admin UI). But if so, it should be documented;
+if not, the policy should be split into INSERT/UPDATE only.
+
+Surfaced during item 40 commit C chunk 3 review (2026-05-06).
+
+Fix path: decide whether DELETE should be allowed. If yes,
+document in 01_architecture.md or create a "soft offboarding"
+pattern that also handles the auth.users side. If no, split
+policy into FOR INSERT and FOR UPDATE separately.
 
 ---
 
