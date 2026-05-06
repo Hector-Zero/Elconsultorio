@@ -35,6 +35,14 @@ export default function FilesScreen({ onNavigate, param }) {
   const [saving, setSaving]   = useState(false)
   const [showSession, setShowSession] = useState(false)
 
+  // Clinical notes — fetched via patient_assignments → clinical_notes,
+  // matching the QuickPanel pattern. Sibling effect on [patient?.id]
+  // runs after the patient load resolves below.
+  const [assignment, setAssignment]   = useState(null)
+  const [sessions, setSessions]       = useState([])
+  const [loadingClin, setLoadingClin] = useState(true)
+  const [clinError, setClinError]     = useState(null)
+
   useEffect(() => {
     if (!clientId) return
     let alive = true
@@ -89,6 +97,49 @@ export default function FilesScreen({ onNavigate, param }) {
     return () => { alive = false }
   }, [clientId, param])
 
+  // Active assignment + clinical_notes — sibling to the patient-load effect
+  // above, keyed on patient.id so it re-runs when the loaded patient changes.
+  // Mirrors QuickPanel's two-step query.
+  useEffect(() => {
+    if (!patient?.id) return
+    let alive = true
+    setLoadingClin(true)
+    setClinError(null)
+    setAssignment(null)
+    setSessions([])
+
+    ;(async () => {
+      const { data: aData, error: aErr } = await supabase
+        .from('patient_assignments')
+        .select('*')
+        .eq('patient_id', patient.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (!alive) return
+      if (aErr) { setClinError(aErr.message); setLoadingClin(false); return }
+      if (!aData) {
+        // No active assignment — RLS may have blocked, or none exists
+        setLoadingClin(false)
+        return
+      }
+      setAssignment(aData)
+
+      const { data: nData, error: nErr } = await supabase
+        .from('clinical_notes')
+        .select('*')
+        .eq('assignment_id', aData.id)
+        .order('session_date', { ascending: true })
+
+      if (!alive) return
+      if (nErr) { setClinError(nErr.message); setLoadingClin(false); return }
+      setSessions(nData ?? [])
+      setLoadingClin(false)
+    })()
+
+    return () => { alive = false }
+  }, [patient?.id])
+
   function update(patch) { setPatient(p => ({ ...p, ...patch })) }
 
   async function save() {
@@ -110,26 +161,50 @@ export default function FilesScreen({ onNavigate, param }) {
 
   async function addSession(entry) {
     if (!patient) return
-    const next = [...(patient.clinical_notes ?? []), entry]
-    const { error: e } = await supabase
+    if (!assignment) {
+      setError('Este paciente no tiene una asignación activa con un profesional. Asigne un profesional desde la pantalla de Pacientes antes de agregar sesiones.')
+      return
+    }
+    // INSERT into clinical_notes table (joined via patient_assignments).
+    // entry.date is the form's "Fecha" field — translated to session_date here.
+    const { data: inserted, error: insErr } = await supabase
+      .from('clinical_notes')
+      .insert({
+        assignment_id: assignment.id,
+        client_id:     clientId,
+        session_date:  entry.date,
+        notes:         entry.notes,
+      })
+      .select('*')
+      .single()
+    if (insErr) { setError(insErr.message); return }
+
+    const newSessions = [...sessions, inserted].sort((a, b) =>
+      a.session_date < b.session_date ? -1 : a.session_date > b.session_date ? 1 : 0
+    )
+    setSessions(newSessions)
+
+    // Sync patients.total_sessions to actual count — overwrite (not increment)
+    // so any pre-existing drift self-corrects on the next mutation.
+    const newCount = newSessions.length
+    const { error: upErr } = await supabase
       .from('patients')
-      .update({ clinical_notes: next, total_sessions: next.length })
+      .update({ total_sessions: newCount })
       .eq('id', patient.id)
-    if (e) { setError(e.message); return }
-    setPatient(p => ({ ...p, clinical_notes: next, total_sessions: next.length }))
+    if (upErr) { setError(upErr.message); return }
+    setPatient(p => ({ ...p, total_sessions: newCount }))
+
     setShowSession(false)
   }
 
   async function updateSessionNotes(sessionRef, newNotes) {
     if (!patient) return
-    const arr = patient.clinical_notes ?? []
-    const next = arr.map(s => s === sessionRef ? { ...s, notes: newNotes } : s)
     const { error: e } = await supabase
-      .from('patients')
-      .update({ clinical_notes: next })
-      .eq('id', patient.id)
+      .from('clinical_notes')
+      .update({ notes: newNotes })
+      .eq('id', sessionRef.id)
     if (e) { setError(e.message); return }
-    setPatient(p => ({ ...p, clinical_notes: next }))
+    setSessions(prev => prev.map(s => s.id === sessionRef.id ? { ...s, notes: newNotes } : s))
   }
 
   if (loading) {
@@ -158,8 +233,7 @@ export default function FilesScreen({ onNavigate, param }) {
     )
   }
 
-  const sessions = Array.isArray(patient.clinical_notes) ? patient.clinical_notes : []
-  const sortedSessions = [...sessions].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const sortedSessions = [...sessions].sort((a, b) => (a.session_date < b.session_date ? -1 : a.session_date > b.session_date ? 1 : 0))
 
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', background: T.bg, fontFamily: T.sans, color: T.ink }}>
@@ -175,7 +249,12 @@ export default function FilesScreen({ onNavigate, param }) {
               <button style={btn('primary')} onClick={save} disabled={saving}>
                 {saving ? 'Guardando…' : 'Guardar cambios'}
               </button>
-              <button style={btn('primary')} onClick={() => setShowSession(true)}>
+              <button
+                style={{ ...btn('primary'), opacity: assignment ? 1 : 0.5, cursor: assignment ? 'pointer' : 'not-allowed' }}
+                disabled={!assignment}
+                title={!assignment ? 'Asigne un profesional desde la pantalla de Pacientes antes de agregar sesiones.' : ''}
+                onClick={() => setShowSession(true)}
+              >
                 <Icon name="plus" size={14} stroke="#fff" /> Nueva sesión
               </button>
             </div>
@@ -224,7 +303,7 @@ export default function FilesScreen({ onNavigate, param }) {
                 <div style={{ padding: 14, color: T.inkMuted, fontStyle: 'italic', fontSize: 12.5 }}>Sin sesiones registradas. Usa "Nueva sesión" para agregar la primera.</div>
               )}
               {sortedSessions.map((s, i) => (
-                <SessionRow key={i} s={s} i={i} onSave={(notes) => updateSessionNotes(s, notes)} />
+                <SessionRow key={s.id} s={s} i={i} onSave={(notes) => updateSessionNotes(s, notes)} />
               ))}
             </Card>
           </div>
@@ -288,15 +367,13 @@ export default function FilesScreen({ onNavigate, param }) {
 }
 
 function SessionModal({ onClose, onSave }) {
-  const [date, setDate]         = useState(todayISO())
-  const [type, setType]         = useState('presencial')
-  const [duration, setDuration] = useState(50)
-  const [notes, setNotes]       = useState('')
-  const [err, setErr]           = useState(null)
+  const [date, setDate]   = useState(todayISO())
+  const [notes, setNotes] = useState('')
+  const [err, setErr]     = useState(null)
 
   function submit() {
     if (!notes.trim()) { setErr('Agrega notas de la sesión'); return }
-    onSave({ date, type, duration_minutes: Number(duration), notes: notes.trim() })
+    onSave({ date, notes: notes.trim() })
   }
 
   return (
@@ -313,11 +390,7 @@ function SessionModal({ onClose, onSave }) {
           <div style={{ fontSize: 12, color: T.inkMuted, marginTop: 4 }}>Registra una sesión clínica en la ficha del paciente.</div>
         </div>
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <FormField label="Fecha"    value={date}     onChange={setDate} type="date" />
-            <FormField label="Tipo"     value={type}     onChange={setType} as="select" options={[['presencial','Presencial'],['online','Online']]} />
-            <FormField label="Duración" value={duration} onChange={setDuration} type="number" />
-          </div>
+          <FormField label="Fecha" value={date} onChange={setDate} type="date" />
           <FormField label="Notas" value={notes} onChange={setNotes} as="textarea" rows={6} />
           {err && <div style={{ fontSize: 12, color: T.danger ?? '#c33' }}>{err}</div>}
         </div>
@@ -405,11 +478,8 @@ function SessionRow({ s, i, onSave }) {
         <div style={{ fontFamily: T.serif, fontSize: 20, color: T.primary, width: 40, textAlign: 'right' }}>{i + 1}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13, color: T.ink, fontWeight: 500 }}>{fmtLongDate(s.date)}</span>
+            <span style={{ fontSize: 13, color: T.ink, fontWeight: 500 }}>{fmtLongDate(s.session_date)}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 11, color: T.inkMuted, fontFamily: T.mono }}>
-                {(s.type ?? 'sesión')} · {s.duration_minutes ?? 50}m
-              </span>
               {!editing && (
                 <button
                   onClick={() => setEditing(true)}
