@@ -4,6 +4,120 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
+## 2026-05-05 — Tier 1 closure + architectural alignment
+
+Continued the dashboard-first strategic refocus from earlier 2026-05-05
+session. Closed all four Tier 1 items.
+
+### Items resolved
+
+- Item 20 ✅ (commit 96ebd94 + 2750405): patients.status default
+  flipped from 'activo' to 'active'. Diagnostic revealed the original
+  "filter mismatch" hypothesis was wrong — patients screen has no
+  status filter; the field is dormant at the application layer.
+  Cosmetic migration was cheap insurance.
+- Item 19 ✅ (commit e929ffb): list panel scroll fixed by adding
+  overflow:hidden at patients.jsx:186, matching leads.jsx +
+  leadsList.jsx precedent for the same two-panel layout.
+- Item 18 ✅ (commit ad081ee): files/<patient_id> URL contract
+  enforced. Single broken call site (patients.jsx:247 chevron
+  passing lead_id) corrected; silent first-patient fallback in
+  files.jsx removed in favor of proper empty-state. Original gap
+  entry framing was overstated — only one call site was actually
+  broken; the "masking fallback" hypothesis didn't match what the
+  code did.
+- Item 21 ✅ (commits 866bbe7 + bba8fc4, scoped to display fix):
+  files.jsx clinical_notes display path replaced (was reading
+  non-existent patients.clinical_notes JSON column; now queries
+  clinical_notes table via patient_assignments). Field name aligned
+  (s.date → s.session_date). Non-persistable type/duration_minutes
+  fields removed from SessionModal/SessionRow. Write paths present
+  in code but RLS-blocked for admin users — correct schema
+  enforcement of treating-professional clinical authorship.
+
+### Other commits
+
+- 8f8d3c4: bumped item 36 (update-context.sh script breakage) to
+  HIGH priority — the script wipes the schema doc before
+  regeneration, so a failed run leaves docs empty. Destructive
+  failure mode warrants HIGH.
+- 9378ed1: items 38 + 39 added during item 18 work (billing/...
+  lead_id inconsistency, "Crear ficha" stub button cleanup).
+- ad081ee: item 18 fix.
+- bba8fc4: Exportar PDF dead button removal (separate commit per
+  Path A two-commit sequence).
+- 5a14337: item 21 marked resolved in 08_known_gaps.md.
+- 7c389a4: items 40-49 batch covering RLS-as-code, professional
+  auth provisioning, auth model docs, summary in ficha, sort
+  toggle, richer modal, feature toggles architecture, certificado
+  as planned feature, smart defaults, notes layout.
+
+### Architectural decisions locked in
+
+1. **Centro feature toggles via clients.config.features JSON.**
+   Superadmin-controlled (platform operator), centro-consumed
+   (cannot change in own dashboard). Defaults restrictive. RLS
+   reads from this JSON. First toggle to implement:
+   admin_can_view_clinical_notes (read-only admin access for
+   centros where the platform operator has determined eligibility
+   per Chilean Ley 20.584 on clinical authorship).
+
+2. **Clinical notes write authority is professionals-only by
+   schema design.** Admins never write. The toggle (#1) allows
+   admins read access where appropriate; never write.
+   Receptionists never read or write.
+
+3. **Auth model is 90% in place, not a new project.** Discovery
+   revealed App.jsx already detects pro vs admin mode via
+   professionals.user_id linkage; pro-mode nav restriction already
+   exists. What's missing: a test professional account +
+   documentation + RLS captured in migrations. Item 21's write
+   path is testable as soon as item 41 (test pro provisioning)
+   lands.
+
+4. **RLS policies and helper functions are not version-controlled.**
+   They live only in the live Supabase database. This is the
+   foundation issue — the auth model is currently unreproducible
+   across environments. Item 40 addresses this and should precede
+   other RLS work.
+
+### Strategic positioning
+
+Closer to Vitalis launch than the earlier 2026-05-05 framing
+suggested. Not "build new dashboards over weeks" — more like
+"verify existing pro-mode path with test account + capture RLS in
+migrations + document the auth model + flip the admin-view toggle
+for Vitalis." Probably 3-5 focused sessions away from launch-ready.
+
+### Recommended next sessions
+
+1. Item 40: RLS-as-code housekeeping (foundation; pull current
+   policies + helper functions into version-controlled migrations)
+2. Item 41: Provision test professional auth account; verify Item
+   21 write path end-to-end
+3. Item 42: Document auth/role model in .claude-context/
+4. Item 46 (admin_can_view_clinical_notes toggle): Implement via
+   clients.config.features and update RLS to read from it
+5. Resume Tier 2: duration architecture, closing_question removal,
+   patient duplication
+
+### Notes from this session worth preserving
+
+- Original gap entry framings were repeatedly overstated relative
+  to actual code state. The discipline of "discovery → diagnosis
+  → plan → apply" caught this each time and kept fixes
+  appropriately scoped.
+- Diagnostics need to ask "what's the intended permission model?"
+  before assuming "policy missing." The clinical_notes RLS error
+  initially looked like an oversight; it was actually deliberate
+  role separation.
+- The schema enforces a more sophisticated multi-role model than
+  the dashboard UX assumes. This mismatch will keep surfacing
+  until the dashboard's auth model catches up. Items 40-42 begin
+  closing that gap.
+
+---
+
 ## 2026-05-05 — Bot diagnostic session + strategic refocus
 
 Spent the session investigating GPT-4o fallback failures and Sonnet
