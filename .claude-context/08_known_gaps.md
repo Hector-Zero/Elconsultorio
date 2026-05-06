@@ -190,20 +190,29 @@ approach. The dashboard might call it or surface it somewhere.
 
 ### 18. Inconsistent ID routing for "Ver ficha" vs "Cobrar" buttons (2026-05-04)
 
-In `src/screens/patients/quickPanel.jsx` (post-split):
-- "Ver ficha" button → navigates to `files/<patient.id>`
-- "Cobrar" button → navigates to `billing/<lead_id>`
+✅ Resolved 2026-05-05 (commit ad081ee). The actual fix turned out to be
+much smaller than the original gap entry suggested. Diagnostic findings
+from the discovery session:
 
-In `src/screens/patients.jsx` shell (post-split):
-- List-row chevron → navigates to `files/<lead_id>` (inconsistent with quickPanel's "Ver ficha")
+- Only one call site was actually broken: `patients.jsx:247` list-row
+  chevron, passing `p.lead_id` instead of `p.id`
+- "Ver ficha" button (`quickPanel.jsx:241`) was already correct
+- "Cobrar" button goes to `billing/...`, not `files/...` — separate
+  route contract, not item 18 scope
+- A previously-unflagged 4th call site (`agenda.jsx:502`) was already
+  correct
+- The "masking fallback" in `files.jsx` that the original gap entry
+  hypothesized didn't exist — what existed was a silent first-patient
+  fallback that masked the bug differently than expected
 
-`files.jsx` interprets its param as a UUID and falls back to first-patient-
-of-client when lookup fails, which masks the bug. Whether the two routes
-land on the same patient is non-deterministic depending on which ID lookup
-hits first.
+Fix: changed `patients.jsx:247` to pass `p.id`, and removed the silent
+first-patient fallback in `files.jsx` in favor of a proper empty-state
+message. The `files/<patient_id>` contract is now explicit.
 
-Fix: standardize on one ID type for the files route, update all three call
-sites consistently. Verify against `files.jsx` param handling.
+Two related items remain tracked separately:
+- `billing/...` uses `lead_id` across both call sites — covered by item 38
+- "Crear ficha" stub button in `leads/detailPanel.jsx` — covered by
+  item 39 (and item 37 lead lifecycle scope)
 
 ### 20. Schema/application drift on patients.status (2026-05-05)
 
