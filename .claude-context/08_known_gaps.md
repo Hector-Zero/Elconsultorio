@@ -173,20 +173,13 @@ sites consistently. Verify against `files.jsx` param handling.
 
 ### 20. Schema/application drift on patients.status (2026-05-05)
 
-`patients.status` is documented in `02_database_schema.md` as
-`DEFAULT 'activo'` but every existing patient row uses `status='active'`
-(English). Application code writes `'active'`; the schema default is
-never used. The patients screen filters on `status='active'` somewhere
-(header count "X pacientes activos" matches the active-count exactly).
-
-Surfaced 2026-05-05 when test data seeded with the schema-documented value
-`'activo'` was silently filtered out of the list view despite the row
-being present in the database response. Hard to diagnose without devtools
-inspection.
-
-Audit: grep for `'active'` and `'activo'` in `src/`, settle on one value
-(English, given existing data), update schema default to match in a
-migration, backfill any drift.
+✅ Resolved 2026-05-05. Schema default flipped from 'activo' to 'active'
+to match application convention. All 16 existing rows already had
+status='active' so no backfill needed. The original "filter mismatch"
+hypothesis turned out to be wrong — the patients screen has no status
+filter; the field is dormant at the application layer. Drift was
+cosmetic but the migration was cheap insurance against future UI
+surfaces that might read this field.
 
 ### 21. Files screen does not display clinical_notes (2026-05-05)
 
