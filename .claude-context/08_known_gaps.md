@@ -348,14 +348,12 @@ later.
 
 ### 19. Patients screen list panel is not scrollable (2026-05-05)
 
-In `src/screens/patients.jsx` (post-Phase-A split), the patient list panel
-(left side of 2-column grid) does not scroll when content overflows the
-viewport. Surfaced 2026-05-05 with 13+ patients on a 13" screen — rows
-beyond the fold are inaccessible without using the search box.
-
-Fix: audit the 2-column grid wrapper; ensure list panel has `min-height: 0`
-and `overflow: auto` on the right element. Pattern-match against QuickPanel
-which already scrolls correctly.
+✅ Resolved 2026-05-05 (commit e929ffb). List panel column at patients.jsx:186
+was missing `overflow: 'hidden'` — the single declaration that establishes
+a clipping context for grid items, letting the inner flex:1 + overflow:auto
+rows wrapper scroll within bounded height. Matches the leads.jsx +
+leadsList.jsx precedent for the same two-panel layout. Likely a
+transcription oversight from the Phase A patients.jsx shell construction.
 
 ### 25. STATUS dict color-snapshot fragility (2026-05-05)
 
