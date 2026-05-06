@@ -244,7 +244,6 @@ export default function FilesScreen({ onNavigate, param }) {
           subtitle={<span style={{ fontFamily: T.mono }}>Pacientes · {patient.full_name}</span>}
           right={
             <div style={{ display: 'flex', gap: 8 }}>
-              <button style={btn('ghost')}><Icon name="download" size={13} /> Exportar PDF</button>
               <button style={btn('ghost')}><Icon name="file" size={13} /> Certificado de atención</button>
               <button style={btn('primary')} onClick={save} disabled={saving}>
                 {saving ? 'Guardando…' : 'Guardar cambios'}
