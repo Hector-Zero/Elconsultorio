@@ -116,6 +116,80 @@ for Vitalis." Probably 3-5 focused sessions away from launch-ready.
   until the dashboard's auth model catches up. Items 40-42 begin
   closing that gap.
 
+### Item 40 complete (2026-05-06)
+
+RLS-as-code housekeeping landed in five commits + two
+doc-resolution commits.
+
+Discovery phase: 6-query SQL pack run via Supabase Dashboard SQL
+editor (supabase db dump and update-context.sh both blocked by
+infrastructure issues, both tracked separately as items 36 and a
+new docker-dependency observation). Found 18 public tables, 49
+RLS policies, 6 functions, uniform 7×3 grant pattern across 20
+objects (18 tables + 2 views).
+
+Migration sequence:
+
+- A (fcaeaa4): docs(gaps) for 5 surprises
+- B (14f39e3): baseline helper functions + handle_new_user trigger
+- C (760b0f7): 49 RLS policies across 18 tables (522 lines)
+- D (4bb7a65): table + function grants on 20 objects + 8 functions
+- E (f2f996f): two missing updated_at triggers (resolves gap 53)
+
+Plus 2 doc commits (93392b6 to mark items 40 and 53 resolved;
+dfdecd1 to add 3 more new gap entries 56, 57, 58 covering RPC
+migration grant conventions, patients_professional_active_assignment
+scope, users_admin_write DELETE permissions). Gap 55
+(716cd70) — default ACL not captured in migrations — surfaced
+mid-sequence.
+
+Discoveries during the work:
+
+1. Supabase's default ACLs grant EXECUTE on public functions to
+   {postgres, anon, authenticated, service_role} automatically —
+   meaning many "missing" function grants weren't ever
+   Dashboard-authored, just default-applied. Tracked as new gap
+   entry 55: default ACL configuration not captured in
+   migrations.
+2. PostgreSQL's built-in PUBLIC default grants EXECUTE on every
+   new function unless explicitly REVOKEd. Production has this
+   for all 8 functions in scope.
+3. The auth model is more sophisticated than initially
+   documented: super_admins table exists, users.role
+   distinguishes 'admin'/'owner'/'professional',
+   professionals.user_id wires auth users to professional
+   records, and the dashboard already implements pro-mode
+   detection. No new auth infrastructure is needed — what's
+   missing is documentation (item 42) and a test professional
+   account (item 41).
+
+The auth/security model is now version-controlled and
+reproducible. Future environments can recreate production state
+from migrations alone, modulo the default ACL configuration
+which still depends on Supabase's project setup defaults.
+
+### Recommended next sessions (updated)
+
+1. Item 41: Provision test professional auth account; verify
+   Item 21 write path end-to-end (small task)
+2. Item 42: Document auth/role model in .claude-context/
+   (companion to item 40)
+3. Items 50, 51 jointly: tighten clients_public_lookup and
+   professionals_public_read_active exposure via SECURITY
+   DEFINER function pattern (RLS hardening pass)
+4. Item 46 + 55 (default ACL): centro feature toggles via
+   clients.config.features + capture default ACL state
+5. Tier 2 work: duration architecture (now properly designed as
+   Option 1), closing_question removal, patient duplication
+
+### Strategic position
+
+Tier 1 fully closed. Item 40 (the largest single architectural
+item discussed in pre-launch planning) closed. Vitalis launch
+readiness is now bounded by items 41-42 (small tasks) plus
+optional hardening of items 50-54. Realistic launch-readiness
+from current state: 2-4 focused sessions.
+
 ---
 
 ## 2026-05-05 — Bot diagnostic session + strategic refocus
