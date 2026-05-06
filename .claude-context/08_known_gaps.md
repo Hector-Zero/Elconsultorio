@@ -145,28 +145,31 @@ Address before any further schema work.
 
 ### 40. Capture all RLS policies and helper functions as version-controlled migrations (2026-05-05)
 
-The RLS helper functions (my_client_id, my_professional_id,
-is_admin_of_client, is_super_admin) and policies on clinical_notes,
-plus likely many other tables, exist only in the live Supabase
-database — never captured as migrations in supabase/migrations/.
-Surfaced repeatedly during item 21 diagnostics:
-`grep -rln "clinical_notes" supabase/migrations/` returns zero
-matches; same for the helper functions.
+✅ Resolved 2026-05-06 across five commits (fcaeaa4, 14f39e3,
+760b0f7, 4bb7a65, f2f996f). The auth/security model is now
+version-controlled and reproducible. Captured: 6 functions (5 RLS
+helpers + set_updated_at), the handle_new_user trigger on
+auth.users, 49 RLS policies across 18 public-schema tables
+(idempotent via DROP POLICY IF EXISTS / CREATE POLICY), table
+grants on 20 objects (18 tables + 2 views), function EXECUTE
+grants on 8 functions. Plus added two missing BEFORE UPDATE
+triggers on clinical_notes and patient_assignments (resolves
+item 53).
 
-Risk: the auth model is not reproducible. New environments
-(staging, recovery, new region, developer onboarding) would have
-tables but no security model. Anyone with credentials could read
-everything across all clients. Critical for a healthcare product.
+Discovery surfaced new gap entries 50-54 (clients_public_lookup
+exposure, professionals_public_read_active exposure,
+appointments_professional_own DELETE permissions, missing
+updated_at triggers, search_path missing on two functions). Plus
+subsequent items 55+ from the baseline discovery:
+patients_professional_active_assignment FOR ALL, default ACL not
+migration-captured, RPC function migrations don't include
+explicit grants, users_admin_write FOR ALL allows DELETE.
 
-Fix scope: a focused session pulling all current policies and
-helper functions from the live database into version-controlled
-migrations. Best done as a baseline migration (or two: one for
-functions, one for policies) representing the current state.
-Future policy changes go through the migration system, not the
-dashboard SQL editor.
-
-This is foundation work — should be tackled before any further
-schema or RLS changes.
+Faithful capture preserved current production behavior; no
+regressions. Authoring discipline (Decisions 2 and 3) kept the
+baseline migrations exactly that — baselines, not improvements.
+Style normalization and concern-fixing deferred to focused passes
+per gap entry.
 
 ### 41. Provision test professional auth account for end-to-end pro-mode testing (2026-05-05)
 
@@ -797,27 +800,13 @@ agenda.jsx.
 
 ### 53. Missing set_updated_at triggers on clinical_notes and patient_assignments (2026-05-06)
 
-The clinical_notes and patient_assignments tables both have
-`updated_at` columns with `DEFAULT now()` but no `BEFORE UPDATE`
-trigger to keep updated_at in sync on row updates.
-
-Surfaced during item 40 baseline RLS discovery (2026-05-06).
-Other tables with updated_at columns (agents_config, clients,
-patients, session_types) have set_updated_at triggers firing
-BEFORE UPDATE. clinical_notes and patient_assignments lack them
-— likely a transcription gap during the table creation in the
-original schema, but the absence is captured in the item 40
-baseline as faithful production state.
-
-Impact: any update to a clinical_note (e.g., a treating
-professional editing their session notes — item 21's UPDATE path,
-unblocked once item 41 lands) leaves updated_at stale. Similarly
-for assignment updates (e.g., admin changing
-admin_can_view_notes, professional updating ai_summary).
-
-Fix scope: add two BEFORE UPDATE triggers using the existing
-set_updated_at() function. Two-line migration. Will be applied
-as commit E in the item 40 baseline sequence.
+✅ Resolved 2026-05-06 (commit f2f996f). Both BEFORE UPDATE
+triggers added — set_clinical_notes_updated_at and
+set_patient_assignments_updated_at, both firing
+public.set_updated_at(). Behavioral test confirmed: updated_at on
+clinical_notes row 58aeea00-cfa6-4bb7-9a76-314794595642 moved
+from 2026-05-05 01:24:04 to 2026-05-06 22:41:26 after a no-op
+update.
 
 ---
 
