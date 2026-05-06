@@ -327,6 +327,54 @@ with RLS).
 
 Should be tackled in the same RLS hardening pass as item 50.
 
+### 55. Default ACL configuration not captured in migrations (2026-05-06)
+
+Surfaced during item 40 commit D verification. The public schema has
+configured default ACLs (visible via pg_default_acl) that grant
+{postgres, anon, authenticated, service_role} default permissions on
+new tables, sequences, and functions. PostgreSQL's built-in default
+also grants EXECUTE TO PUBLIC on new functions.
+
+These default ACLs are NOT in any migration. If a fresh environment
+is set up without the same defaults configured, the migrations would
+create the schema objects but the runtime behavior would differ —
+for example, functions created without TO PUBLIC might fail
+permission checks for some Supabase auth flows.
+
+The current pg_default_acl state for owner=postgres in the public
+schema:
+
+- Tables (r): postgres + anon + authenticated + service_role get
+  arwdDxtm
+- Functions (f): postgres + anon + authenticated + service_role get
+  X (EXECUTE)
+- Sequences (S): postgres + anon + authenticated + service_role get
+  rwU
+
+Plus an identical-shaped set for owner=supabase_admin.
+
+Side note on commit D framing: D's commit message described the 8
+function grants as "Dashboard-authored separately from creating
+migrations." That framing is slightly wrong — those grants would
+have been auto-applied via these default ACLs even without
+Dashboard intervention. D's behavior is correct (the explicit
+GRANT statements are harmless re-statements of what defaults
+produce), only the message's mental model was off. Not worth
+amending; tracking the underlying issue here.
+
+Fix path: capture the ALTER DEFAULT PRIVILEGES statements that
+produced these ACLs as a baseline migration. Investigation needed
+to determine whether Supabase's project setup applies these
+defaults automatically (in which case the migration documents what
+the platform provides), or whether they were configured for this
+specific project (in which case the migration restores them on a
+fresh setup).
+
+Coordinate with item 40's broader RLS-as-code work — defaults are
+foundational infrastructure that everything else assumes.
+
+Don't address now. Track for future hardening pass.
+
 ---
 
 ## MEDIUM PRIORITY — Quality of life / robustness
