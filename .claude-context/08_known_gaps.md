@@ -229,6 +229,104 @@ dedicated 04_auth_model.md) documenting:
 Couple this with item 40 (RLS-as-code) so the docs and the
 migrations cover the same ground.
 
+### 50. clients_public_lookup exposes clients.config to anon (2026-05-06)
+
+The `clients_public_lookup` policy on the `clients` table grants
+`SELECT` to `{anon, authenticated}` with `using_expr = true` —
+every row of `clients`, every column, is publicly readable.
+
+Surfaced during item 40 baseline RLS discovery (2026-05-06). The
+slug-resolution flow in src/lib/useClient.js needs anon read
+access to bootstrap the SPA before login (resolves subdomain →
+clients.id), which is why the policy exists. But it also exposes
+the full clients.config jsonb of every centro, including
+config.empresa.{nombre, direccion, telefono, email, rut},
+config.modo_empresa, config.theme_id, and the future
+config.features toggles (item 46) and config.modules field
+(item 27).
+
+Risk: anyone iterating subdomain slugs can dump every centro's
+contact info, business RUT, and feature gates. For a healthcare
+product this is a non-trivial surface. Once item 46 lands, RLS
+will read config.features to determine permissions — exposing
+those toggles tells an attacker which centros have which
+features enabled. For privacy-sensitive toggles like
+admin_can_view_clinical_notes, this enables targeted attacks:
+identify centros where admin compromise grants clinical data
+access.
+
+Fix scope: tighten the policy to expose only the columns the SPA
+actually needs to bootstrap. Likely: id, slug, name,
+config->'theme_id', config->'empresa'->'nombre' (for the login
+page header). The rest (config.features, config.modules,
+contact details) should require authentication. Implementation
+options:
+
+- A view exposing only safe columns, with the policy applied to
+  the view and base table locked to authenticated
+- Column-level grants (Postgres supports per-column SELECT) plus
+  a policy filtering jsonb keys
+- A SECURITY DEFINER function get_client_bootstrap(slug text)
+  that returns only the safe subset, called by the SPA before
+  login
+
+Recommended approach: SECURITY DEFINER function pattern, matching
+existing helper functions in this codebase. get_client_bootstrap
+(slug text) returns a composite or JSON with only the
+public-safe columns. The pattern is reusable — same approach
+works for item 51 and any future public-readable endpoints. The
+view and column-level grants approaches are alternatives but
+introduce different trade-offs (views: more maintenance per
+column added; column grants: tricky to combine with RLS).
+
+Coordinate with item 46 (features toggles) since both touch
+clients.config — the bootstrap function's safe-subset definition
+needs to evolve in lockstep with what config keys exist.
+
+### 51. professionals_public_read_active exposes email + user_id to anon (2026-05-06)
+
+The `professionals_public_read_active` policy grants `SELECT` to
+`{anon, authenticated}` for any row where `active = true`. This
+supports the public-facing centro page (eventual
+cliente.elconsultorio.cl) displaying professional bios, photos,
+specialties, etc.
+
+Surfaced during item 40 baseline RLS discovery (2026-05-06). The
+policy returns ALL columns of every active professional, which
+includes:
+
+- email — professionals' personal contact email
+- user_id — uuid fingerprint of the auth.users row, enabling
+  enumeration of which auth users are professionals
+- availability jsonb — detailed weekly schedule including
+  unbooked hours
+- created_at, color, etc. — operational metadata not relevant to
+  the public profile
+
+The public profile genuinely needs full_name, initials, bio,
+specialties, photo_url, years_experience, public_summary,
+public_credentials, public_documents.
+
+Risk: scraping public centro pages collects emails of every
+licensed psychologist using the platform. user_id enumeration
+creates a small recon surface for any future auth-related
+attacks.
+
+Fix scope: same options as item 50 — view, column-level grants,
+or SECURITY DEFINER function returning the public-safe subset.
+
+Recommended approach: SECURITY DEFINER function pattern, matching
+existing helper functions in this codebase. get_public_professionals
+(client_slug text) returns the public-profile subset of active
+professionals for a centro. The pattern is reusable — same
+approach works for item 50 and any future public-readable
+endpoints. The view and column-level grants approaches are
+alternatives but introduce different trade-offs (views: more
+maintenance per column added; column grants: tricky to combine
+with RLS).
+
+Should be tackled in the same RLS hardening pass as item 50.
+
 ---
 
 ## MEDIUM PRIORITY — Quality of life / robustness
@@ -599,6 +697,80 @@ enumerated when that pass is scheduled. Coordinate with item 43
 (summary integration) and item 44 (sort toggle) since they're all
 ficha-screen UI work.
 
+### 52. appointments_professional_own allows DELETE; should be soft-delete pattern (2026-05-06)
+
+The `appointments_professional_own` policy is `FOR ALL`, meaning
+treating professionals can SELECT, INSERT, UPDATE, AND DELETE
+their own appointments via the SPA.
+
+Surfaced during item 40 baseline RLS discovery (2026-05-06).
+DELETE creates orphan billing/clinical records and loses audit
+trail:
+
+- invoices.lead_id (and patient_id) survive but the appointment
+  context for them is gone
+- conversions.lead_id references the lead which still has the
+  appointment-flow history but no appointment row
+- clinical_notes.assignment_id survives via patient_assignments,
+  but no appointment record of when the session was scheduled
+- Audit trail for cancellations, no-shows, billing disputes is
+  lost
+
+Best-practice pattern: appointments are soft-deleted via
+`status = 'cancelled'`. The application already treats 'cancelled'
+as the soft-delete marker — agenda's status filters, the
+citaModal status dropdown, eventBlock/monthGrid render paths,
+and create_booking_atomic's slot-conflict query (which filters
+`status IN ('pending_payment', 'confirmed')` — already excludes
+cancelled rows from re-booking blocks) all assume this
+convention. But the appointments.status column is free-form text
+with no CHECK constraint or enum — the convention is enforced by
+application code, not by the schema.
+
+Fix scope: split appointments_professional_own into two
+policies — SELECT + UPDATE for treating professionals (no INSERT,
+no DELETE), and INSERT scoped to the booking flow / admin only.
+Update agenda's cita-deletion UX to issue a status update
+instead of a DELETE.
+
+Schema-level hardening (optional, in same pass): add a CHECK
+constraint enumerating the valid status values
+('pending_payment', 'confirmed', 'completed', 'cancelled',
+'no_show'). This formalizes what's currently a code convention
+and prevents drift if a future caller writes an unexpected
+value. Not strictly required for the policy fix to work — the
+soft-delete behavior already works at the application + RPC
+layer — but would close the schema/application drift.
+
+Worth a deliberate decision before tackling — the SPA's current
+deletion UX (agenda's citaModal) sends a DELETE on cancel, and
+the change ripples through the realtime subscription pipeline in
+agenda.jsx.
+
+### 53. Missing set_updated_at triggers on clinical_notes and patient_assignments (2026-05-06)
+
+The clinical_notes and patient_assignments tables both have
+`updated_at` columns with `DEFAULT now()` but no `BEFORE UPDATE`
+trigger to keep updated_at in sync on row updates.
+
+Surfaced during item 40 baseline RLS discovery (2026-05-06).
+Other tables with updated_at columns (agents_config, clients,
+patients, session_types) have set_updated_at triggers firing
+BEFORE UPDATE. clinical_notes and patient_assignments lack them
+— likely a transcription gap during the table creation in the
+original schema, but the absence is captured in the item 40
+baseline as faithful production state.
+
+Impact: any update to a clinical_note (e.g., a treating
+professional editing their session notes — item 21's UPDATE path,
+unblocked once item 41 lands) leaves updated_at stale. Similarly
+for assignment updates (e.g., admin changing
+admin_can_view_notes, professional updating ai_summary).
+
+Fix scope: add two BEFORE UPDATE triggers using the existing
+set_updated_at() function. Two-line migration. Will be applied
+as commit E in the item 40 baseline sequence.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
@@ -724,6 +896,31 @@ This `modules` field on `clients.config` (jsonb) is not documented in
 Fix: document the expected shape and allowed values of
 `clients.config.modules`. If the field is unused/legacy, remove the
 filter from Sidebar.
+
+### 54. SECURITY DEFINER functions missing explicit search_path (2026-05-06)
+
+Three of the five auth helper functions explicitly set
+`search_path TO 'public'`: is_admin_of_client, is_super_admin,
+my_professional_id. Two do not: my_client_id, handle_new_user.
+
+Surfaced during item 40 baseline RLS discovery (2026-05-06).
+SECURITY DEFINER functions without an explicit search_path are
+vulnerable to schema-shadowing attacks — if a malicious user can
+create objects in a schema that's earlier in the resolved
+search_path, they can hijack table references inside the
+function. The standard hardening is `SET search_path = 'public',
+'pg_catalog'` (matching the convention used by
+create_booking_atomic).
+
+Risk: low in practice. The attack requires CREATE privilege in
+some schema visible to the function's call path, and Supabase's
+default role grants don't enable that. But it's a well-known
+PostgreSQL footgun and the inconsistency suggests these two
+functions were authored before the convention was adopted.
+
+Fix scope: add `SET search_path = 'public', 'pg_catalog'` to
+my_client_id and handle_new_user. Two-line fix per function.
+Captured AS-IS in the item 40 baseline; tighten in a follow-up.
 
 ---
 
