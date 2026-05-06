@@ -220,6 +220,32 @@ or formalize the `statusOf` mapping with documentation. Should be
 resolved before Vitalis goes live to avoid confusing the centro staff
 who'll see the dashboard.
 
+### 36. update-context.sh schema fails on Supabase password auth (2026-05-05)
+
+`./scripts/update-context.sh schema` returns:
+
+```
+psql: error: connection to server at "aws-1-us-east-1.pooler.supabase.com"
+(18.213.155.45), port 5432 failed: FATAL: password authentication failed
+for user "postgres"
+```
+
+The script can't refresh `02_database_schema.md` from the live database.
+Schema doc updates currently require manual editing, which doesn't scale
+and risks doc drift.
+
+Investigation needed:
+- Check the script's connection string source (env file, hardcoded, etc.)
+- Verify whether Supabase rotated the database password recently
+- Confirm whether the script's connection method (direct postgres user
+  on pooler:5432) is still supported or if it should use a different
+  pooler connection string
+- Fix the script to use credentials that work, or refactor to use the
+  Supabase API instead of direct psql
+
+This blocks Item 20-style schema migrations from being able to refresh
+docs cleanly. Address before doing more schema work.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
