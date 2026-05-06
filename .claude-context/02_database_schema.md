@@ -161,7 +161,7 @@
 - `session_value` integer DEFAULT 0
 - `total_sessions` integer DEFAULT 0
 - `balance` integer DEFAULT 0
-- `status` text DEFAULT 'activo'::text
+- `status` text DEFAULT 'active'::text
 - `tags` ARRAY DEFAULT '{}'::text[]
 - `since` date DEFAULT CURRENT_DATE
 - `created_at` timestamp with time zone NOT NULL DEFAULT now()
