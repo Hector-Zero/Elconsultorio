@@ -226,21 +226,32 @@ surfaces that might read this field.
 
 ### 21. Files screen does not display clinical_notes (2026-05-05)
 
-In `src/screens/files.jsx`, the "Historial de sesiones" panel shows
-"Sin sesiones registradas" even when `clinical_notes` rows exist for
-the patient's active assignment. The QuickPanel on the patients screen
-displays the same notes correctly (queries `clinical_notes` by
-`assignment_id`).
+✅ Resolved 2026-05-05 (commits 866bbe7 and bba8fc4). Original gap
+entry described "files.jsx Ficha clínica panel does not display
+clinical_notes despite QuickPanel showing same notes correctly."
+Diagnostic revealed deeper architecture: files.jsx was treating
+patients.clinical_notes as a JSON column (it doesn't exist) instead
+of querying clinical_notes table joined via patient_assignments.
 
-Likely cause: `files.jsx` queries clinical_notes via a different path
-(possibly by `patient_id`, which doesn't exist on the table per schema)
-or via an assignment lookup that's failing/missing.
+Display fix replicated QuickPanel's working pattern:
+patient_assignments active assignment → clinical_notes by
+assignment_id. Field name aligned (s.date → s.session_date).
+Non-persisted type/duration_minutes fields removed from
+SessionModal/SessionRow rather than left as fallback-only UI.
 
-Surfaced 2026-05-05 with Camila Reyes test data — same patient renders
-3 notes correctly in the patients QuickPanel and zero notes in the
-files screen Ficha clínica. files.jsx split is already deferred from
-Phase A to Phase B; this fix can land alongside that refactor or as
-a standalone bugfix before then.
+Pre-existing 1-row drift on Camila Reyes (test seed artifact)
+self-corrects on next mutation.
+
+Item 21 closes scoped to DISPLAY FIX ONLY. The write paths
+(INSERT/UPDATE in addSession and updateSessionNotes) are present
+in the code but are correctly RLS-blocked for admin users — this
+is the schema deliberately enforcing that only treating
+professionals write clinical notes (per Chilean Ley 20.584 on
+clinical record authorship). Verifying the write path requires
+a professional auth account, which is tracked as a separate item.
+
+Hook extraction to dedupe QuickPanel + files.jsx fetch logic
+deferred to Phase B (item 14-17 cluster).
 
 ### 26. Three overlapping status taxonomies (2026-05-05)
 
