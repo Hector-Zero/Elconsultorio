@@ -244,7 +244,7 @@ export default function PatientsScreen({ onNavigate, param }) {
                     </div>
                     <div
                       style={{ textAlign: 'right', color: T.inkMuted, cursor: 'pointer' }}
-                      onClick={(e) => { e.stopPropagation(); onNavigate?.('files/' + p.lead_id) }}
+                      onClick={(e) => { e.stopPropagation(); onNavigate?.('files/' + p.id) }}
                     ><Icon name="chevronR" size={14} /></div>
                   </div>
                 )

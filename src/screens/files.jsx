@@ -41,31 +41,26 @@ export default function FilesScreen({ onNavigate, param }) {
     setLoading(true); setError(null)
 
     async function load() {
-      // `param` is now a patient.id (UUID). Reject the literal 'null' /
+      // `param` is a patient.id (UUID). Reject the literal 'null' /
       // 'undefined' strings that can leak through when a caller passes
-      // `'files/' + p.lead_id` for a manually-created patient whose
-      // lead_id is null — the prior version forwarded that to .eq() and
+      // a missing field — the prior version forwarded that to .eq() and
       // Postgres tried to cast 'null' to uuid, surfacing as
       // "invalid input syntax for type uuid: null".
       const patientId = (param && param !== 'null' && param !== 'undefined') ? param : null
 
-      let pat = null
-      if (patientId) {
-        const { data, error: pErr } = await supabase
-          .from('patients').select('*')
-          .eq('client_id', clientId).eq('id', patientId).maybeSingle()
-        if (pErr) { setError(pErr.message); setLoading(false); return }
-        if (!alive) return
-        pat = data
-      } else {
-        // Fall back: first patient for this client (preserves prior behavior
-        // of "open the ficha screen with no param" landing on a sensible default).
-        const { data } = await supabase
-          .from('patients').select('*').eq('client_id', clientId)
-          .order('created_at', { ascending: true }).limit(1).maybeSingle()
-        if (!alive) return
-        pat = data
+      if (!patientId) {
+        setError('Selecciona un paciente desde la lista de Pacientes.')
+        setLoading(false)
+        return
       }
+
+      let pat = null
+      const { data, error: pErr } = await supabase
+        .from('patients').select('*')
+        .eq('client_id', clientId).eq('id', patientId).maybeSingle()
+      if (pErr) { setError(pErr.message); setLoading(false); return }
+      if (!alive) return
+      pat = data
       if (!pat) {
         setError('Paciente no encontrado. Selecciona un paciente desde la lista de Pacientes.')
         setLoading(false)
