@@ -109,6 +109,40 @@ API response correctly, or Make.com is not passing them through.
 
 Cache analytics unusable until fixed. Defer until bot polish session.
 
+### 36. update-context.sh schema destroys docs on auth failure (2026-05-05)
+
+⚠️ **Destructive failure mode.** The script wipes `02_database_schema.md`
+BEFORE attempting regeneration, so a failed run leaves the doc empty
+until `git restore` recovers it. Anyone running this in the auth-failure
+window destroys context docs without warning.
+
+`./scripts/update-context.sh schema` currently fails with:
+
+```
+psql: error: connection to server at "aws-1-us-east-1.pooler.supabase.com"
+(18.213.155.45), port 5432 failed: FATAL: password authentication failed
+for user "postgres"
+```
+
+The script can't refresh `02_database_schema.md` from the live database.
+Schema doc updates currently require manual editing, which doesn't scale
+and risks doc drift.
+
+Investigation needed:
+- Patch the destructive-before-validate pattern: the script should
+  verify it can connect + query BEFORE truncating the existing doc
+- Check the script's connection string source (env file, hardcoded, etc.)
+- Verify whether Supabase rotated the database password recently
+- Confirm whether the script's connection method (direct postgres user
+  on pooler:5432) is still supported or if it should use a different
+  pooler connection string
+- Fix the script to use credentials that work, or refactor to use the
+  Supabase API instead of direct psql
+
+Blocks future schema migrations from refreshing docs cleanly AND
+risks silent doc destruction by anyone unaware of the auth issue.
+Address before any further schema work.
+
 ---
 
 ## MEDIUM PRIORITY — Quality of life / robustness
@@ -219,32 +253,6 @@ extend `qualified_lead` boolean into a proper enum on the leads table,
 or formalize the `statusOf` mapping with documentation. Should be
 resolved before Vitalis goes live to avoid confusing the centro staff
 who'll see the dashboard.
-
-### 36. update-context.sh schema fails on Supabase password auth (2026-05-05)
-
-`./scripts/update-context.sh schema` returns:
-
-```
-psql: error: connection to server at "aws-1-us-east-1.pooler.supabase.com"
-(18.213.155.45), port 5432 failed: FATAL: password authentication failed
-for user "postgres"
-```
-
-The script can't refresh `02_database_schema.md` from the live database.
-Schema doc updates currently require manual editing, which doesn't scale
-and risks doc drift.
-
-Investigation needed:
-- Check the script's connection string source (env file, hardcoded, etc.)
-- Verify whether Supabase rotated the database password recently
-- Confirm whether the script's connection method (direct postgres user
-  on pooler:5432) is still supported or if it should use a different
-  pooler connection string
-- Fix the script to use credentials that work, or refactor to use the
-  Supabase API instead of direct psql
-
-This blocks Item 20-style schema migrations from being able to refresh
-docs cleanly. Address before doing more schema work.
 
 ---
 
