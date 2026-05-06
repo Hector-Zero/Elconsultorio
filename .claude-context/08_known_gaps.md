@@ -254,6 +254,53 @@ or formalize the `statusOf` mapping with documentation. Should be
 resolved before Vitalis goes live to avoid confusing the centro staff
 who'll see the dashboard.
 
+### 37. Lead lifecycle — separate leads from patients architecturally (2026-05-05)
+
+The leads screen currently mixes two distinct concerns: active prospect
+management (people the bot is talking to who haven't booked yet) and
+historical record-keeping (people who already converted). This produces
+UX confusion — confirmed-and-booked leads still appear in the active
+list with action buttons that overlap the auto-conversion logic.
+
+Decision (2026-05-05): leads and patients are completely separate
+entities. Once a patient row + appointment exist for a lead, that lead
+is automatically archived. Archival trigger is appointment creation —
+the unambiguous signal that the lead has converted. Payment is a
+downstream concern that doesn't invalidate the conversion.
+
+The leads screen becomes:
+
+- Active list: only leads still in conversation with the bot, no
+  appointment yet
+- Archived list: leads that converted, kept for metrics + outbound
+  retargeting + historical reporting
+- No "Crear ficha" or "Convertir a paciente" buttons. Conversion is
+  automatic, driven by booking success (specifically, appointment
+  creation)
+
+Optional enhancement (also deferred): when a lead converts, allow the
+bot or system to write a "pre-session comment" to the new patient's
+ficha — a short summary of the patient's stated reason for treatment,
+captured during the lead conversation. This would carry context from
+the lead phase into the clinical phase without conflating the entities.
+
+Schema implications:
+
+- Leads table needs a terminal lifecycle state ("converted" or
+  "archived") OR a foreign key relationship to patients (e.g.,
+  `leads.converted_patient_id`)
+- Booking-success flow (Make.com or Edge Function) needs to set this
+  state when an appointment is created for a lead
+- Leads screen filter logic needs to exclude archived leads from
+  default view
+- The patients table may need an `originating_lead_id` link for the
+  metrics view
+
+This is a Phase 2 / bot polish session task. Touches the leads screen,
+the booking flow, the schema, and possibly the patient ficha (for the
+pre-session comment). Plan it as one architectural session, not
+piecemeal.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
