@@ -183,7 +183,7 @@ export default function PatientsScreen({ onNavigate, param }) {
         )}
 
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 420px', minHeight: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', borderRight: `1px solid ${T.line}`, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', borderRight: `1px solid ${T.line}`, minWidth: 0, overflow: 'hidden' }}>
             <div style={{ padding: '12px 24px', borderBottom: `1px solid ${T.line}`, display: 'flex', gap: 10, alignItems: 'center' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8,
