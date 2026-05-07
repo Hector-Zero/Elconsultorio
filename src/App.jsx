@@ -112,8 +112,13 @@ export default function App() {
 
   const isPro = !!professional
 
-  // Pro mode: only agenda/patients/settings allowed
-  const allowed = isPro ? ['calendar', 'patients', 'settings'] : Object.keys(SCREENS)
+  // Pro mode: screen-render permission. Wider than Sidebar's proAllowed list
+  // because 'files' is a URL-only screen (no nav entry) reached via "Ver
+  // ficha" buttons in patient and quickPanel UIs. Billing intentionally
+  // excluded — billing/cobrar is admin/receptionist territory.
+  const allowed = isPro
+    ? ['calendar', 'patients', 'settings', 'files']
+    : Object.keys(SCREENS)
   const [base, param] = hash.split('/')
   const safeBase = allowed.includes(base) ? base : (isPro ? 'calendar' : 'leads')
   const Screen = SCREENS[safeBase] ?? (isPro ? AgendaScreen : LeadsScreen)

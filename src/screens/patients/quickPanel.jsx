@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useContext } from 'react'
 import { T, Icon, Avatar, btn, SectionLabel, avatarTint, avatarInk } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
+import { ClientCtx } from '../../lib/ClientCtx.js'
 import { fmtShortDate, fmtLongDate } from './_shared.jsx'
 
 function InlineField({ label, value, mono, placeholder, onSave }) {
@@ -127,6 +128,8 @@ async function generateSummary(notes) {
 }
 
 export default function PatientQuickPanel({ p, onNavigate, updatePatient }) {
+  const { professional } = useContext(ClientCtx)
+  const isPro = !!professional
   // Active assignment for this patient
   const [assignment, setAssignment] = useState(null)
   // Clinical notes (sessions) belonging to that assignment
@@ -237,10 +240,12 @@ export default function PatientQuickPanel({ p, onNavigate, updatePatient }) {
             <div style={{ fontSize: 11.5, color: T.inkMuted, marginTop: 10 }}>Paciente desde {fmtLongDate(sinceDate)}</div>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isPro ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8, marginTop: 16 }}>
           <button style={btn('soft')} onClick={() => onNavigate?.('files/' + p.id)}><Icon name="file" size={13} stroke={T.primary} /> Ver ficha</button>
           <button style={btn('soft')} onClick={() => onNavigate?.('calendar')}><Icon name="calendar" size={13} stroke={T.primary} /> Agendar</button>
-          <button style={btn('soft')} onClick={() => onNavigate?.('billing/' + p.lead_id)}><Icon name="card" size={13} stroke={T.primary} /> Cobrar</button>
+          {!isPro && (
+            <button style={btn('soft')} onClick={() => onNavigate?.('billing/' + p.lead_id)}><Icon name="card" size={13} stroke={T.primary} /> Cobrar</button>
+          )}
         </div>
       </div>
 

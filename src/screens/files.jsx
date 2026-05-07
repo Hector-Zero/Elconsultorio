@@ -26,7 +26,8 @@ const fmtNextCard = (iso) => {
 }
 
 export default function FilesScreen({ onNavigate, param }) {
-  const { clientId } = useContext(ClientCtx)
+  const { clientId, professional } = useContext(ClientCtx)
+  const isPro = !!professional
   const [patient, setPatient] = useState(null)
   const [next, setNext]       = useState(null)
   const [apptCount, setApptCount] = useState(0)
@@ -340,9 +341,11 @@ export default function FilesScreen({ onNavigate, param }) {
                 <Row k="Sesiones totales" v={apptCount} mono />
                 <Row k="Valor sesión" v={CLP(patient.session_value ?? 0)} mono />
               </div>
-              <div style={{ marginTop: 12 }}>
-                <button style={btn('soft')} onClick={() => onNavigate?.('billing/' + patient.lead_id)}>Cobrar</button>
-              </div>
+              {!isPro && (
+                <div style={{ marginTop: 12 }}>
+                  <button style={btn('soft')} onClick={() => onNavigate?.('billing/' + patient.lead_id)}>Cobrar</button>
+                </div>
+              )}
             </Card>
 
             {patient.tags?.length > 0 && (
