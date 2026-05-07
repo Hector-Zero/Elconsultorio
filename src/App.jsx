@@ -58,8 +58,10 @@ function useHash() {
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still loading
   const { clientId, config, loading: clientLoading, setConfig } = useClient()
-  // Parallel infrastructure for β migration. Not yet consumed by descendants;
-  // commits 3-5 migrate Sidebar/settings/agenda to read from these instead.
+  // β migration in progress. bootstrap is consumed by App.jsx itself
+  // (theme effect, profileIncomplete derivation) and by Sidebar (commit 3).
+  // configFetch is wired but not yet consumed by descendants; commit 5
+  // migrates settings/agenda to read from it.
   const bootstrap = useClientBootstrap()
   const configFetch = useClientConfig({ session, clientId })
   const [hash, navigate] = useHash()
@@ -87,11 +89,10 @@ export default function App() {
   }, [session?.user?.id, clientId])
 
   useEffect(() => {
-    if (!config) return
-    const theme = getTheme(config.theme_id)
+    const theme = getTheme(bootstrap.themeId)
     applyTheme(theme)
     setThemeVersion(v => v + 1)
-  }, [config?.theme_id])
+  }, [bootstrap.themeId])
 
   // ONBOARDING STEP 1: Profile must be completed before the app is fully functional.
   // The bot system prompt, email notifications, certificates, and agenda all depend
@@ -107,7 +108,7 @@ export default function App() {
       .then(({ data }) => setFirstPro(data?.[0] ?? null))
   }, [clientId, proRefresh])
 
-  if (session === undefined || clientLoading || (session && professional === undefined)) {
+  if (session === undefined || clientLoading || bootstrap.loading || (session && professional === undefined)) {
     return (
       <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: T.bgSunk }}>
         <div style={{ fontFamily: T.serif, fontSize: 22, color: T.inkMuted, fontStyle: 'italic' }}>cargando…</div>
@@ -136,8 +137,8 @@ export default function App() {
         clientId, config, session, setConfig, professional, firstPro,
         // Empresa mode: complete once empresa.nombre is filled (professionals can be added later).
         // Single mode:  complete only when a professional row with non-empty full_name exists.
-        profileIncomplete: config?.modo_empresa
-          ? !(config?.empresa?.nombre?.trim())
+        profileIncomplete: bootstrap.modoEmpresa
+          ? !(bootstrap.empresaNombre?.trim())
           : (!firstPro || !(firstPro.full_name?.trim())),
         refreshFirstPro: () => setProRefresh(v => v + 1),
       }}>
