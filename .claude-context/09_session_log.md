@@ -229,6 +229,45 @@ remaining HIGH priority before launch readiness.
 Realistic launch readiness: 1-2 focused sessions for item 42
 plus optional UX polish from gap batch 59-64.
 
+### Item 42 closure (2026-05-07)
+
+Item 42 closed: auth and role model documented at
+.claude-context/10_auth_model.md (870 lines, nine sections
+covering overview, tables, helper functions, RLS patterns, mode
+detection, provisioning runbook, role conventions, planned
+feature toggles, cross-references). Synthesizes findings from
+items 40 + 41.
+
+The doc surfaced one new gap (item 65: professionals.user_id
+lacks UNIQUE constraint) — captured but not addressed; needs a
+design decision about whether one auth user can legitimately
+link to multiple professional rows (multi-centro work scenario).
+
+### Strategic position update — launch readiness
+
+All HIGH priority items resolved. Remaining gaps are MEDIUM/LOW
+priority polish: items 50, 51 (RLS exposure hardening), 52, 57,
+58 (FOR ALL policy splits), items 59-64 (pro mode UX cluster
+from item 41 smoke test), items 54, 55, 56, 65 (DB-level
+conventions and constraints).
+
+Vitalis launch readiness: foundationally complete. The system
+can be launched in manual mode (bot off) immediately. Pro mode
+is functionally usable. RLS-as-code in version control. Auth
+model documented. Future hardening passes optional.
+
+Recommended next session: zero or one focused topics depending
+on energy. Options ordered by impact:
+
+1. Items 50 + 51 jointly: tighten clients_public_lookup and
+   professionals_public_read_active via SECURITY DEFINER lookup
+   functions. RLS hardening pass.
+2. Items 59-64 batch: pro mode UX polish session. Each entry is
+   small individually; bundling them into one focused session
+   works well.
+3. Tier 2 architecture: duration-on-session-types refactor,
+   closing_question removal, patient duplication detection.
+
 ---
 
 ## 2026-05-05 — Bot diagnostic session + strategic refocus
