@@ -1,6 +1,5 @@
 import React, { useState, useEffect, Component } from 'react'
 import { supabase } from './lib/supabase.js'
-import { useClient } from './lib/useClient.js'
 import { ClientCtx } from './lib/ClientCtx.js'
 import { useClientBootstrap } from './lib/useClientBootstrap.js'
 import { useClientConfig } from './lib/useClientConfig.js'
@@ -57,13 +56,8 @@ function useHash() {
 
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still loading
-  const { clientId, config, loading: clientLoading, setConfig } = useClient()
-  // β migration in progress. bootstrap is consumed by App.jsx itself
-  // (theme effect, profileIncomplete derivation) and by Sidebar (commit 3).
-  // configFetch is wired but not yet consumed by descendants; commit 5
-  // migrates settings/agenda to read from it.
   const bootstrap = useClientBootstrap()
-  const configFetch = useClientConfig({ session, clientId })
+  const configFetch = useClientConfig({ session, clientId: bootstrap.clientId })
   const [hash, navigate] = useHash()
   const [themeVersion, setThemeVersion] = useState(0)
   const [professional, setProfessional] = useState(undefined) // undefined = loading, null = admin mode
@@ -77,16 +71,16 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!session?.user?.id || !clientId) { setProfessional(null); return }
+    if (!session?.user?.id || !bootstrap.clientId) { setProfessional(null); return }
     setProfessional(undefined)
     supabase.from('professionals')
       .select('*')
-      .eq('client_id', clientId)
+      .eq('client_id', bootstrap.clientId)
       .eq('user_id', session.user.id)
       .eq('active', true)
       .maybeSingle()
       .then(({ data }) => setProfessional(data ?? null))
-  }, [session?.user?.id, clientId])
+  }, [session?.user?.id, bootstrap.clientId])
 
   useEffect(() => {
     const theme = getTheme(bootstrap.themeId)
@@ -98,17 +92,17 @@ export default function App() {
   // The bot system prompt, email notifications, certificates, and agenda all depend
   // on the professional's name, email, and other details being set.
   useEffect(() => {
-    if (!clientId) { setFirstPro(null); return }
+    if (!bootstrap.clientId) { setFirstPro(null); return }
     supabase.from('professionals')
       .select('*')
-      .eq('client_id', clientId)
+      .eq('client_id', bootstrap.clientId)
       .eq('active', true)
       .order('created_at')
       .limit(1)
       .then(({ data }) => setFirstPro(data?.[0] ?? null))
-  }, [clientId, proRefresh])
+  }, [bootstrap.clientId, proRefresh])
 
-  if (session === undefined || clientLoading || bootstrap.loading || (session && professional === undefined)) {
+  if (session === undefined || bootstrap.loading || (session && professional === undefined)) {
     return (
       <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: T.bgSunk }}>
         <div style={{ fontFamily: T.serif, fontSize: 22, color: T.inkMuted, fontStyle: 'italic' }}>cargando…</div>
@@ -134,7 +128,10 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ClientCtx.Provider value={{
-        clientId, config, session, setConfig, professional, firstPro,
+        clientId: bootstrap.clientId,
+        session,
+        professional,
+        firstPro,
         // Empresa mode: complete once empresa.nombre is filled (professionals can be added later).
         // Single mode:  complete only when a professional row with non-empty full_name exists.
         profileIncomplete: bootstrap.modoEmpresa
