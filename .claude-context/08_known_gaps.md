@@ -206,30 +206,14 @@ remaining is in the 59-64 batch.
 
 ### 42. Document the auth/role model in .claude-context/ (2026-05-05)
 
-The auth/role model is implemented across multiple disconnected
-places (useClient.js for slug→client_id resolution, App.jsx for
-professional detection, RLS helper functions for DB-side
-enforcement) but not documented anywhere in .claude-context/.
-Surfaced during item 21 diagnostics — Code had to discover the
-model by grep across the codebase rather than reading
-documentation.
-
-Fix scope: add a new section to 01_architecture.md (or a
-dedicated 04_auth_model.md) documenting:
-
-- How client_id resolution works (URL slug → clients.id via
-  useClient.js)
-- How professional vs admin mode is determined (App.jsx checking
-  professionals.user_id)
-- How RLS enforces permissions (helper functions reading users +
-  professionals tables)
-- The two-system gotcha: URL slug must match users.client_id or
-  queries silently return nothing
-- The handle_new_user trigger behavior on auth user creation
-- The 3-screen pro nav restriction in App.jsx:113-119
-
-Couple this with item 40 (RLS-as-code) so the docs and the
-migrations cover the same ground.
+✅ Resolved 2026-05-07 (commit 4e51ad0). Auth and role model
+documented in .claude-context/10_auth_model.md. Covers the auth
+chain (auth.users → public.users → professionals/super_admins),
+helper functions, RLS patterns, mode detection logic,
+provisioning runbook with both ideal and workaround scenarios,
+role conventions, the planned centro feature toggles
+architecture, and full cross-references to migrations + gap
+entries + session log.
 
 ### 50. clients_public_lookup exposes clients.config to anon (2026-05-06)
 
@@ -1151,6 +1135,31 @@ Fix path: in shared.jsx Sidebar, wrap the BOT ACTIVO block in
 
 Part of the items 59-64 pro mode UX cluster (see meta framing
 in MEDIUM section). Surfaced during item 41 smoke test.
+
+### 65. professionals.user_id has no UNIQUE constraint (2026-05-07)
+
+Surfaced during item 42 documentation. The professionals.user_id
+column allows multiple rows to point at the same auth.users.id.
+my_professional_id() defends against this with LIMIT 1 — picking
+arbitrarily if such a state exists. In practice we provision
+one auth user per professional, so this hasn't bitten anyone,
+but the constraint should match the convention.
+
+Two interpretations of the right fix:
+
+A) Belt-and-braces: Add UNIQUE constraint. The convention should
+   be enforced at the DB level. my_professional_id() would never
+   see the multiple-row case.
+
+B) Intentional design: One auth user CAN legitimately link to
+   multiple professional rows (one person working at multiple
+   centros). In that case LIMIT 1 is wrong — should pick by
+   clientId from context.
+
+Decide which interpretation is intended before adding the
+constraint or rewriting the helper. If interpretation B, also
+revisit the auth model doc section 2.3 to reflect the
+multi-centro pattern.
 
 ---
 
