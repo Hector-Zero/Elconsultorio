@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, btn, SectionLabel, applyTheme } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
+import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { fetchClientConfig, mergeClientConfig } from '../../lib/clientConfig.js'
 import { THEMES, DEFAULT_THEME_ID, getTheme } from '../../config/themes.js'
 import { SettingsHeader } from './_shared.jsx'
 
 // ───── Appearance — themes ─────
 export default function AppearanceSettings() {
-  const { clientId, config, setConfig } = useContext(ClientCtx)
+  const { clientId } = useContext(ClientCtx)
+  const { config, setConfig } = useContext(ClientConfigCtx)
 
   // null = no card highlighted (no saved theme). A string = saved theme id.
   const [themeId, setThemeId] = useState(config?.theme_id ?? null)

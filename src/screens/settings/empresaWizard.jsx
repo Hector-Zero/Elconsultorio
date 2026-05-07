@@ -1,12 +1,14 @@
 import React, { useState, useContext } from 'react'
 import { T, Icon, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
+import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
 import { DAYS, DEFAULT_AVAILABILITY, Field2, SmallToggle, SettingsHeader, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 export default function EmpresaWizard({ onCancel, onActivated }) {
-  const { clientId, config, setConfig } = useContext(ClientCtx)
+  const { clientId } = useContext(ClientCtx)
+  const { config, setConfig } = useContext(ClientConfigCtx)
   const [step, setStep] = useState(1)
 
   // step 1

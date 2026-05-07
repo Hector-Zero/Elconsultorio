@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, btn, SectionLabel, avatarTint, avatarInk, initials, PRO_COLORS } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
+import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
 import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
@@ -11,7 +12,8 @@ const DEFAULT_SESSION_TYPES = [
 ]
 
 export default function ProfileSettings({ onDirtyChange }) {
-  const { clientId, config, setConfig, refreshFirstPro } = useContext(ClientCtx)
+  const { clientId, refreshFirstPro } = useContext(ClientCtx)
+  const { config, setConfig } = useContext(ClientConfigCtx)
   const empresaMode = !!config?.modo_empresa
 
   const [name,         setName]         = useState(config?.profile_name    ?? '')

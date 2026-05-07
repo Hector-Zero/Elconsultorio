@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, btn } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
+import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
 import { SettingsHeader, FieldRow, textInput, formatRut } from './_shared.jsx'
@@ -8,7 +9,8 @@ import EmpresaWizard from './empresaWizard.jsx'
 
 // ───── Empresa — modo empresa wizard + active form ─────
 export default function EmpresaSettings({ onActivated, onNavigate }) {
-  const { clientId, config, setConfig } = useContext(ClientCtx)
+  const { clientId } = useContext(ClientCtx)
+  const { config, setConfig } = useContext(ClientConfigCtx)
   const [wizard, setWizard] = useState(false)
   const [banner, setBanner] = useState(null) // { proName }
   // Fetch fresh config on mount so the CTA-vs-active decision uses DB truth,
@@ -82,7 +84,8 @@ export default function EmpresaSettings({ onActivated, onNavigate }) {
 }
 
 function EmpresaActiveForm({ banner, onNavigate }) {
-  const { clientId, config, setConfig } = useContext(ClientCtx)
+  const { clientId } = useContext(ClientCtx)
+  const { config, setConfig } = useContext(ClientConfigCtx)
   const [nombre, setNombre]       = useState(config?.empresa?.nombre ?? '')
   const [rut, setRut]             = useState(config?.empresa?.rut ?? '')
   const [direccion, setDireccion] = useState(config?.empresa?.direccion ?? '')

@@ -1,11 +1,11 @@
 import React, { useContext } from 'react'
 import { T, btn } from '../shared.jsx'
-import { ClientCtx } from '../../lib/ClientCtx.js'
+import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { SettingsHeader } from './_shared.jsx'
 
 // ───── Integrations ─────
 export default function IntegrationsSettings() {
-  const { config } = useContext(ClientCtx)
+  const { config } = useContext(ClientConfigCtx)
   const waConnected     = !!config?.whatsapp_number_id
   const resendConnected = !!config?.resend_from
 

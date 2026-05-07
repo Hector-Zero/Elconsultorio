@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, Sidebar, TopBar, btn, ConfirmModal } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
+import { useClientBootstrap } from '../lib/useClientBootstrap.js'
 import { supabase } from '../lib/supabase.js'
 import CitaModal from './agenda/citaModal'
 import {
@@ -47,9 +48,10 @@ function buildAvailabilityMap(scheduleRows) {
 const VIEW_KEY = 'elc_agenda_view'
 
 export default function AgendaScreen({ onNavigate }) {
-  const { clientId, config, professional, profileIncomplete } = useContext(ClientCtx)
+  const { clientId, professional, profileIncomplete } = useContext(ClientCtx)
+  const { modoEmpresa } = useClientBootstrap()
   const isPro = !!professional
-  const empresaMode = !!config?.modo_empresa
+  const empresaMode = !!modoEmpresa
   const [view, setView] = useState(() => {
     const v = typeof localStorage !== 'undefined' && localStorage.getItem(VIEW_KEY)
     return v === 'day' || v === 'month' ? v : 'week'

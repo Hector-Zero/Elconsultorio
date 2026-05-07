@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, btn, SectionLabel } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
+import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
 import { SettingsHeader, FieldRow, Toggle, textInput } from './_shared.jsx'
 
 // ───── Bot config — wired to agents_config + clients.config ─────
 export default function BotConfig() {
-  const { clientId, config } = useContext(ClientCtx)
+  const { clientId } = useContext(ClientCtx)
+  const { config } = useContext(ClientConfigCtx)
 
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
