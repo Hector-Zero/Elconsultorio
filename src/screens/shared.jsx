@@ -1,5 +1,6 @@
 import React, { useContext, useState, useEffect, useRef } from 'react'
 import { ClientCtx } from '../lib/ClientCtx.js'
+import { useClientBootstrap } from '../lib/useClientBootstrap.js'
 import { supabase } from '../lib/supabase.js'
 
 // ───────────── design tokens ─────────────
@@ -200,9 +201,9 @@ const ALL_ITEMS = [
 
 export const Sidebar = ({ active = 'leads', onNavigate }) => {
   const ctx = useContext(ClientCtx)
-  const modules   = ctx?.config?.modules
-  const brandName = ctx?.config?.brand_name ?? 'consultorio'
-  const letter    = brandName[0]?.toLowerCase() ?? 'c'
+  const { modules, brandName, avatarUrl } = useClientBootstrap()
+  const safeBrandName = brandName ?? 'consultorio'
+  const letter    = safeBrandName[0]?.toLowerCase() ?? 'c'
   const userEmail = ctx?.session?.user?.email ?? ''
 
   const isPro     = !!ctx?.professional
@@ -220,9 +221,9 @@ export const Sidebar = ({ active = 'leads', onNavigate }) => {
       fontFamily: T.sans, color: T.sidebarText ?? T.inkSoft,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px 18px' }}>
-        {ctx?.config?.avatar_url ? (
+        {avatarUrl ? (
           <img
-            src={ctx.config.avatar_url}
+            src={avatarUrl}
             alt=""
             style={{ width: 28, height: 28, borderRadius: 8, objectFit: 'cover' }}
           />
@@ -235,7 +236,7 @@ export const Sidebar = ({ active = 'leads', onNavigate }) => {
           }}>{letter}</div>
         )}
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <div style={{ fontFamily: T.serif, fontSize: 17, color: T.sidebarText, fontStyle: 'italic' }}>{brandName}</div>
+          <div style={{ fontFamily: T.serif, fontSize: 17, color: T.sidebarText, fontStyle: 'italic' }}>{safeBrandName}</div>
           <div style={{ fontSize: 10.5, color: T.sidebarTextMuted, letterSpacing: 0.4, textTransform: 'uppercase' }}>{userEmail}</div>
         </div>
       </div>
