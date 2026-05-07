@@ -888,6 +888,106 @@ policy into FOR INSERT and FOR UPDATE separately.
 
 ---
 
+### Pro mode UX cluster (items 59-64)
+
+The following six entries (59-64) all surfaced during item 41's
+Pro 3 smoke test on 2026-05-06. They share a root cause: pro
+mode UX hasn't received a deliberate design pass. Pro mode
+currently works at the foundational level (auth, RLS, nav
+restriction, screen routing), but the surfaces that DO render in
+pro mode show admin-view UI without pro-specific adaptation. May
+be bundled in a future "pro mode UX pass" focused session.
+
+Items 59-63 are MEDIUM priority; item 64 is LOW priority and
+sits in the LOW section below.
+
+---
+
+### 59. Sidebar shows email instead of professional full_name in pro mode (2026-05-06)
+
+When logged in as a professional, the sidebar header shows the
+auth user's email (e.g., PROF3@TEST.CL) instead of the
+professional's display name (e.g., "Profesional 3"). Cosmetic
+but obvious — first thing a real professional notices.
+
+Fix path: in shared.jsx Sidebar component, when ctx.professional
+is non-null, render professional.full_name instead of
+session.user.email. The data is already in ClientCtx (App.jsx
+loads the professionals row when session + clientId are present).
+
+Surfaced during item 41 smoke test.
+
+### 60. Ajustes screen empty for professionals (2026-05-06)
+
+When Pro 3 clicks Ajustes, the screen renders without useful
+content. The current settings view is designed for admins
+(centro config, billing settings, professional management). Pro
+mode needs a different view — likely the professional's own
+profile (full_name, email, photo, schedule, public_profile flag,
+document uploads). Currently empty rather than tailored.
+
+Needs design decision: read-only profile, editable profile, or
+skip Ajustes entirely for pros (in which case 'settings' should
+be removed from Sidebar's proAllowed list and from App.jsx's pro
+allowed-screens list).
+
+Surfaced during item 41 smoke test.
+
+### 61. Profesional selector unnecessary in Nueva cita when in pro mode (2026-05-06)
+
+The Nueva cita modal shows a "PROFESIONAL" select dropdown. In
+pro mode, the only valid value is the logged-in professional
+themselves — the selector adds friction without function. Should
+be hidden, OR pre-filled-and-disabled showing the pro's name.
+
+Fix path: in agenda.jsx / citaModal.jsx, conditionally render the
+selector based on isPro. Pre-fill professional_id with
+my_professional_id() value (already available via ClientCtx).
+
+Surfaced during item 41 smoke test.
+
+### 62. Cannot create new patients from pro mode (intentional, but UX needs adjustment) (2026-05-06)
+
+Two intertwined concerns:
+
+1. "Nuevo paciente" button at patients.jsx:176 has no onClick
+   handler (pre-existing stub flagged in Phase A retro but not
+   previously tracked).
+2. Even if functional, pro mode shouldn't expose
+   patient-creation. patients_professional_active_assignment WITH
+   CHECK requires a pre-existing patient_assignments row —
+   chicken-and-egg makes pro INSERT fail anyway. Patient creation
+   is admin/receptionist territory per Chilean clinical norms.
+
+Fix path: implement patient creation for admin mode (item 39
+territory), AND hide "Nuevo paciente" button in pro mode. Pro
+mode users only book appointments for EXISTING patients (search
+by name/RUT/email, not create). This was confirmed as the right
+architectural direction during 2026-05-06 conversation.
+
+Surfaced during item 41 smoke test on the Nueva cita modal RLS
+error: "No se pudo crear paciente: new row violates row-level
+security policy for table 'patients'."
+
+### 63. Apariencia in Ajustes doesn't save changes (2026-05-06)
+
+Theme/appearance settings in Ajustes don't persist after change.
+Could be:
+
+- Write-permission RLS issue (pro mode lacks UPDATE on whatever
+  table backs the settings)
+- Save handler bug (no actual write call wired up)
+- State management issue (local state updates but no persistence
+  call)
+
+Diagnostic needed before fix path. Worth checking what storage
+backs apariencia (clients.config? public.users.preferences?
+localStorage only?).
+
+Surfaced during item 41 smoke test.
+
+---
+
 ## LOW PRIORITY — Polish & nice-to-haves
 
 ### 6. `useUnsavedChanges` hook for dashboards
@@ -1036,6 +1136,21 @@ functions were authored before the convention was adopted.
 Fix scope: add `SET search_path = 'public', 'pg_catalog'` to
 my_client_id and handle_new_user. Two-line fix per function.
 Captured AS-IS in the item 40 baseline; tighten in a follow-up.
+
+### 64. BOT ACTIVO sidebar block visible in pro mode (2026-05-06)
+
+The "BOT ACTIVO — Responde en WhatsApp y califica leads
+automáticamente" block at the bottom of the sidebar shows in pro
+mode. Bot configuration is admin/operations territory;
+professionals have no relationship to bot management. Should be
+hidden when isPro, similar to the Cobrar button treatment in
+item 41 (commit 0684d84).
+
+Fix path: in shared.jsx Sidebar, wrap the BOT ACTIVO block in
+`{!isPro && (...)}`.
+
+Part of the items 59-64 pro mode UX cluster (see meta framing
+in MEDIUM section). Surfaced during item 41 smoke test.
 
 ---
 
