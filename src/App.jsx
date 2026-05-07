@@ -2,6 +2,9 @@ import React, { useState, useEffect, Component } from 'react'
 import { supabase } from './lib/supabase.js'
 import { useClient } from './lib/useClient.js'
 import { ClientCtx } from './lib/ClientCtx.js'
+import { useClientBootstrap } from './lib/useClientBootstrap.js'
+import { useClientConfig } from './lib/useClientConfig.js'
+import { ClientConfigCtx } from './lib/ClientConfigCtx.js'
 import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
 import Login from './Login.jsx'
@@ -55,6 +58,10 @@ function useHash() {
 export default function App() {
   const [session, setSession] = useState(undefined) // undefined = still loading
   const { clientId, config, loading: clientLoading, setConfig } = useClient()
+  // Parallel infrastructure for β migration. Not yet consumed by descendants;
+  // commits 3-5 migrate Sidebar/settings/agenda to read from these instead.
+  const bootstrap = useClientBootstrap()
+  const configFetch = useClientConfig({ session, clientId })
   const [hash, navigate] = useHash()
   const [themeVersion, setThemeVersion] = useState(0)
   const [professional, setProfessional] = useState(undefined) // undefined = loading, null = admin mode
@@ -134,10 +141,17 @@ export default function App() {
           : (!firstPro || !(firstPro.full_name?.trim())),
         refreshFirstPro: () => setProRefresh(v => v + 1),
       }}>
-        <div key={themeVersion} style={{ height: '100vh', display: 'flex', overflow: 'hidden' }}>
-          <Screen onNavigate={navigate} param={param} />
-          <AssistantFAB />
-        </div>
+        <ClientConfigCtx.Provider value={{
+          config:    configFetch.config,
+          setConfig: configFetch.setConfig,
+          loading:   configFetch.loading,
+          error:     configFetch.error,
+        }}>
+          <div key={themeVersion} style={{ height: '100vh', display: 'flex', overflow: 'hidden' }}>
+            <Screen onNavigate={navigate} param={param} />
+            <AssistantFAB />
+          </div>
+        </ClientConfigCtx.Provider>
       </ClientCtx.Provider>
     </ErrorBoundary>
   )
