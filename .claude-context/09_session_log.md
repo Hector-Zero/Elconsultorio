@@ -4,7 +4,7 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
-## 2026-05-05 — Tier 1 closure + architectural alignment
+## 2026-05-05 → 2026-05-07 — Tier 1 closure + architectural alignment
 
 Continued the dashboard-first strategic refocus from earlier 2026-05-05
 session. Closed all four Tier 1 items.
@@ -189,6 +189,45 @@ item discussed in pre-launch planning) closed. Vitalis launch
 readiness is now bounded by items 41-42 (small tasks) plus
 optional hardening of items 50-54. Realistic launch-readiness
 from current state: 2-4 focused sessions.
+
+### Item 41 + 21 closure (2026-05-07)
+
+Item 41 closed: test professional auth account provisioned for
+Profesional 3 (prof3@test.cl / Pro3Test2026!, auth user
+e4ff8c48-ca93-4422-8701-9d229b660c66). Linkage: auth.users →
+public.users (via manual INSERT since handle_new_user trigger
+only fires AFTER INSERT and we set raw_user_meta_data after
+creation) → professionals (via UPDATE professionals.user_id).
+
+Item 21 fully closed: clinical_notes write path verified
+end-to-end. Pro 3 successfully saved a clinical note for Camila
+Reyes (b95b58cf-...). RLS policy notes_treating_professional_all
+permits the write because pa.professional_id matches
+my_professional_id() and pa.status = 'active'.
+
+Routing fix mid-session (commit 0684d84): App.jsx pro-mode
+allowed screens list was conflated with Sidebar's nav-visibility
+list. Fixed by separating concerns — files added to allowed
+screens for ficha access, billing remained excluded as
+admin-only. Cobrar buttons hidden in QuickPanel and files.jsx
+when isPro. The two lists (App.jsx allowed vs shared.jsx
+proAllowed) now correctly serve different purposes.
+
+Six new gap entries (59-64) catalogued from smoke test
+findings — all pro mode UX gaps, see meta framing in
+08_known_gaps.md for the bundling context.
+
+### Strategic position update
+
+Pro mode is now functionally usable: a real professional could
+log in, see their patients, view fichas, write clinical notes,
+book appointments for existing patients. Items 59-64 are UX
+polish, not blockers. Items 50, 51 (RLS exposure hardening)
+remain optional. Item 42 (auth model documentation) is the one
+remaining HIGH priority before launch readiness.
+
+Realistic launch readiness: 1-2 focused sessions for item 42
+plus optional UX polish from gap batch 59-64.
 
 ---
 
