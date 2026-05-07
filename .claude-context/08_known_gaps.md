@@ -173,37 +173,36 @@ per gap entry.
 
 ### 41. Provision test professional auth account for end-to-end pro-mode testing (2026-05-05)
 
-The professional dashboard infrastructure already exists in code
-(App.jsx detects pro mode via professionals.user_id linkage,
-restricts nav to ['calendar', 'patients', 'settings'], and
-pro-specific RLS policies are written assuming this model). But
-there's no test professional auth account in the dev environment,
-so pro-mode flows are untested.
+✅ Resolved 2026-05-07. Pro 3 auth account provisioned via
+Supabase Dashboard (raw_user_meta_data with client_id +
+role='professional'); handle_new_user trigger auto-created the
+public.users row; professionals.user_id updated to wire the auth
+user to the existing Profesional 3 record.
 
-Specific impact: item 21's clinical_notes write path cannot be
-smoke-tested without a professional account, because RLS
-correctly blocks admin writes (only treating professionals write
-clinical notes per the schema's intent and Chilean Ley 20.584).
+Smoke test surfaced a routing regression — pro-mode allowed-
+screens list at App.jsx:116 was conflated with Sidebar's nav-
+visibility list, blocking URL navigation to files/billing.
+Fixed in commit 0684d84: pro-mode allowed list now extends to
+include 'files' (clinical, pros need it) but NOT 'billing'
+(operational, admin/receptionist territory). The same commit
+hides "Cobrar" buttons in QuickPanel + files.jsx from pro mode
+to prevent UI dead-ends pointing at the now-blocked billing
+screen.
 
-Fix scope: SQL provisioning to:
-1. Create an auth user (e.g., for one of the existing
-   Profesional 1/2/3 records)
-2. Set raw_user_meta_data with client_id and role appropriately
-3. Insert the matching public.users row (or verify the
-   handle_new_user trigger creates it)
-4. Update the professionals.user_id column to point to the new
-   auth user
-5. Verify professional auth context: log in as the user, confirm
-   pro mode loads, confirm the user can write clinical notes for
-   their assigned patients
+Item 21 write-path verified end-to-end: Pro 3 created a clinical
+note on Camila Reyes via the Ficha clínica's "Nueva sesión"
+modal. INSERT succeeded against clinical_notes, RLS allowed the
+write per notes_treating_professional_all WITH CHECK (active
+assignment confirmed). total_sessions counter bumped correctly.
 
-This unblocks: item 21 write-path verification, future
-per-professional duration testing (Tier 2), pre-launch validation
-that Vitalis's psychologists can actually use the system.
+Pro mode UX gaps surfaced during the smoke test are tracked
+separately as items 59-64 (collectively a "pro mode UX pass"
+deferred concern).
 
-Small task — likely under an hour including testing. Do this
-after the RLS-as-code work (item 40) so the policies are
-documented before testing them.
+Pre-launch validation status: Vitalis's psychologists can use
+the system end-to-end at the foundational layer (auth, RLS, nav
+restriction, screen routing, clinical authorship). UX polish
+remaining is in the 59-64 batch.
 
 ### 42. Document the auth/role model in .claude-context/ (2026-05-05)
 
@@ -510,6 +509,13 @@ a professional auth account, which is tracked as a separate item.
 
 Hook extraction to dedupe QuickPanel + files.jsx fetch logic
 deferred to Phase B (item 14-17 cluster).
+
+**2026-05-07 addendum:** Write path also verified end-to-end as
+part of item 41 closure. Pro 3 created a clinical note on Camila
+Reyes via the "Nueva sesión" modal; INSERT succeeded against
+clinical_notes per notes_treating_professional_all WITH CHECK
+(active assignment confirmed); total_sessions counter bumped.
+Both display and write paths now confirmed working.
 
 ### 26. Three overlapping status taxonomies (2026-05-05)
 
