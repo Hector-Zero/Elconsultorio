@@ -217,101 +217,28 @@ entries + session log.
 
 ### 50. clients_public_lookup exposes clients.config to anon (2026-05-06)
 
-The `clients_public_lookup` policy on the `clients` table grants
-`SELECT` to `{anon, authenticated}` with `using_expr = true` —
-every row of `clients`, every column, is publicly readable.
-
-Surfaced during item 40 baseline RLS discovery (2026-05-06). The
-slug-resolution flow in src/lib/useClient.js needs anon read
-access to bootstrap the SPA before login (resolves subdomain →
-clients.id), which is why the policy exists. But it also exposes
-the full clients.config jsonb of every centro, including
-config.empresa.{nombre, direccion, telefono, email, rut},
-config.modo_empresa, config.theme_id, and the future
-config.features toggles (item 46) and config.modules field
-(item 27).
-
-Risk: anyone iterating subdomain slugs can dump every centro's
-contact info, business RUT, and feature gates. For a healthcare
-product this is a non-trivial surface. Once item 46 lands, RLS
-will read config.features to determine permissions — exposing
-those toggles tells an attacker which centros have which
-features enabled. For privacy-sensitive toggles like
-admin_can_view_clinical_notes, this enables targeted attacks:
-identify centros where admin compromise grants clinical data
-access.
-
-Fix scope: tighten the policy to expose only the columns the SPA
-actually needs to bootstrap. Likely: id, slug, name,
-config->'theme_id', config->'empresa'->'nombre' (for the login
-page header). The rest (config.features, config.modules,
-contact details) should require authentication. Implementation
-options:
-
-- A view exposing only safe columns, with the policy applied to
-  the view and base table locked to authenticated
-- Column-level grants (Postgres supports per-column SELECT) plus
-  a policy filtering jsonb keys
-- A SECURITY DEFINER function get_client_bootstrap(slug text)
-  that returns only the safe subset, called by the SPA before
-  login
-
-Recommended approach: SECURITY DEFINER function pattern, matching
-existing helper functions in this codebase. get_client_bootstrap
-(slug text) returns a composite or JSON with only the
-public-safe columns. The pattern is reusable — same approach
-works for item 51 and any future public-readable endpoints. The
-view and column-level grants approaches are alternatives but
-introduce different trade-offs (views: more maintenance per
-column added; column grants: tricky to combine with RLS).
-
-Coordinate with item 46 (features toggles) since both touch
-clients.config — the bootstrap function's safe-subset definition
-needs to evolve in lockstep with what config keys exist.
+✅ Resolved 2026-05-07 (commit 6a04e64). Replaced clients_public_lookup
+with two paths: get_public_centro_info(p_slug) SECURITY DEFINER function
+returns a narrow display whitelist for anon and pro-mode (id, slug, name,
+theme_id, modo_empresa, empresa_nombre, brand_name, avatar_url, modules);
+clients_admin_read_own grants full row to authenticated admins. Old policy
+dropped. Closure required a six-commit β cutover migrating SPA consumers
+off useClient/ClientCtx.config (commits ced25c4, 1e08cc0, 1ce2322, 590bfed,
+6a04e64). Whitelist excludes config.features per gap 46 — superadmin
+toggles stay admin-only.
 
 ### 51. professionals_public_read_active exposes email + user_id to anon (2026-05-06)
 
-The `professionals_public_read_active` policy grants `SELECT` to
-`{anon, authenticated}` for any row where `active = true`. This
-supports the public-facing centro page (eventual
-cliente.elconsultorio.cl) displaying professional bios, photos,
-specialties, etc.
+✅ Partially resolved 2026-05-07 (commit 6a04e64). The anon exposure is
+closed: professionals_public_read_active was dropped, replaced by
+professionals_authenticated_read_active (authenticated, scoped to
+caller's client_id). Anon callers can no longer enumerate professionals.
 
-Surfaced during item 40 baseline RLS discovery (2026-05-06). The
-policy returns ALL columns of every active professional, which
-includes:
-
-- email — professionals' personal contact email
-- user_id — uuid fingerprint of the auth.users row, enabling
-  enumeration of which auth users are professionals
-- availability jsonb — detailed weekly schedule including
-  unbooked hours
-- created_at, color, etc. — operational metadata not relevant to
-  the public profile
-
-The public profile genuinely needs full_name, initials, bio,
-specialties, photo_url, years_experience, public_summary,
-public_credentials, public_documents.
-
-Risk: scraping public centro pages collects emails of every
-licensed psychologist using the platform. user_id enumeration
-creates a small recon surface for any future auth-related
-attacks.
-
-Fix scope: same options as item 50 — view, column-level grants,
-or SECURITY DEFINER function returning the public-safe subset.
-
-Recommended approach: SECURITY DEFINER function pattern, matching
-existing helper functions in this codebase. get_public_professionals
-(client_slug text) returns the public-profile subset of active
-professionals for a centro. The pattern is reusable — same
-approach works for item 50 and any future public-readable
-endpoints. The view and column-level grants approaches are
-alternatives but introduce different trade-offs (views: more
-maintenance per column added; column grants: tricky to combine
-with RLS).
-
-Should be tackled in the same RLS hardening pass as item 50.
+The recommended get_public_professionals(p_slug) function for the
+eventual public profile page is deferred — the page does not yet exist
+and there are zero anon consumers in the SPA. Folded into gap 66, which
+includes the professionals data model split that determines the
+function's safe-public field set.
 
 ### 55. Default ACL configuration not captured in migrations (2026-05-06)
 
@@ -970,6 +897,57 @@ localStorage only?).
 
 Surfaced during item 41 smoke test.
 
+### 66. Professionals data model refactor (2026-05-07)
+
+Split public.professionals into two tables along the pro-owned vs
+centro-owned boundary:
+
+- professional_profiles (pro-owned, one row per pro): user_id (UNIQUE),
+  full_name, photo_url, bio, specialties, education, years_experience,
+  public_summary, public_credentials, public_documents.
+- professional_employments (centro-owned, N rows per pro across centros):
+  profile_id, client_id, email, color, role, active, public_profile,
+  availability. UNIQUE(profile_id, client_id).
+
+Per Hector 2026-05-07: public_profile is centro-owned (centro decides
+which pros are featured publicly after offline agreement). The split
+formalizes the permission boundary that's currently conflated, resolves
+gap 65 (user_id UNIQUE moves to profiles), refines gap 57 (cleaner
+permission boundaries).
+
+Plus: generalize the menu+pick compatibility-table pattern (already
+proven by session_types ↔ professional_session_types) and document in
+10_auth_model.md.
+
+The eventual public profile page at cliente.elconsultorio.cl needs both
+the table split and a SECURITY DEFINER get_public_professionals(p_slug)
+function. Together with gap 67, this completes the deferred half of
+gap 51.
+
+Cross-references: gaps 51, 57, 65, 67. Tackle as one focused session.
+Touches schema, ~10 RLS policies, ~6 SPA files, two RPCs, and the auth
+model doc. Not a launch blocker.
+
+### 67. Distinguish admin-owner from admin-receptionist for clinical notes (2026-05-07)
+
+Per Hector 2026-05-07: a centro's admin role is not monolithic. Admin-
+owners are licensed psychologists with clinical authority per Ley 20.584.
+Admin-receptionists handle scheduling/billing only — no clinical sight.
+
+The data model implicitly distinguishes them: admin-owners have a
+professionals row linking back to their auth user (or
+professional_profiles.user_id post-gap-66); admin-receptionists do not.
+
+Implementation: add helper is_admin_with_clinical_authority(p_client_id)
+checking (a) is_admin_of_client, (b) auth user has a professional_profiles
+row, (c) the centro's gap-46 admin_can_view_clinical_notes toggle is true.
+Update notes_admin_with_consent policy to read from this helper instead
+of the per-assignment admin_can_view_notes flag.
+
+Refines gap 46. Cross-references: gaps 46, 66 (helper reads
+professional_profiles.user_id post-split). Tackle alongside or after
+gap 66. Not a launch blocker.
+
 ---
 
 ## LOW PRIORITY — Polish & nice-to-haves
@@ -1160,6 +1138,25 @@ Decide which interpretation is intended before adding the
 constraint or rewriting the helper. If interpretation B, also
 revisit the auth model doc section 2.3 to reflect the
 multi-centro pattern.
+
+### 68. SPA effect-dependency hygiene — duplicate fetches per page load (2026-05-07)
+
+Two related multiplexing patterns surfaced during items 50/51 SPA
+migration:
+
+(a) useClientBootstrap is called by three independent React subtrees
+(App.jsx, Sidebar, agenda.jsx) — three identical
+get_public_centro_info RPC calls per page load. Fix: pull bootstrap
+into a context provider; consumers read from context.
+
+(b) useClientConfig fires twice per login (once when session resolves,
+again when clientId resolves). Fix: gate the fetch branch on both
+dependencies being non-null before firing.
+
+Both functionally harmless — fast calls, idempotent, second result
+overwrites first. Aesthetically wasteful, would surface in performance
+audits. Tackle in a focused effect-dep hygiene pass when needed. Not
+a launch blocker.
 
 ---
 

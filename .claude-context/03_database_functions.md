@@ -2,6 +2,9 @@
 
 > Auto-generated. Run `./scripts/update-context.sh functions` to refresh.
 > Last updated: 2026-05-04 16:12:37 -04
+> Manual update 2026-05-07: get_public_centro_info added by hand
+> (script auth blocked per gap 36; next successful regen will
+> overwrite formatting but preserve the function set).
 
 ## create_booking_atomic
 
@@ -457,6 +460,53 @@ END;
 $function$
 
 ```
+
+## get_public_centro_info
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_public_centro_info(p_slug text)
+ RETURNS TABLE(id uuid, slug text, name text, theme_id text, modo_empresa text, empresa_nombre text, brand_name text, avatar_url text, modules jsonb)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+  SELECT
+    c.id,
+    c.slug,
+    c.name,
+    c.config ->> 'theme_id'                  AS theme_id,
+    c.config ->> 'modo_empresa'              AS modo_empresa,
+    c.config -> 'empresa' ->> 'nombre'       AS empresa_nombre,
+    c.config ->> 'brand_name'                AS brand_name,
+    c.config ->> 'avatar_url'                AS avatar_url,
+    c.config -> 'modules'                    AS modules
+  FROM public.clients c
+  WHERE c.slug = p_slug
+    AND c.active = true
+  LIMIT 1
+$function$
+```
+
+Resolves a centro slug to its safe-public display subset for the SPA
+bootstrap path (anon callers and pro-mode authenticated users that the
+admin-only `clients_admin_read_own` policy doesn't cover). SECURITY
+DEFINER bypasses RLS to expose the whitelisted columns regardless of
+caller role; EXECUTE granted to `anon` and `authenticated`.
+
+Defined in
+[20260507120000_clients_professionals_auth_hardening_additive.sql](../supabase/migrations/20260507120000_clients_professionals_auth_hardening_additive.sql)
+with the corrected return shape applied via
+[20260507120100_correct_clients_professionals_hardening.sql](../supabase/migrations/20260507120100_correct_clients_professionals_hardening.sql)
+(initial whitelist was narrower; brand_name, avatar_url, and modules
+added in the correction so pro-mode sidebars render correctly).
+
+Whitelist deliberately excludes `config.features` (gap 46 superadmin
+toggles), `config.empresa.{rut, email, telefono, direccion, logo_url}`,
+`config.profile_*`, `config.whatsapp_*`, `config.resend_from`, and
+other operational keys. The full clients row is reachable only via
+`clients_admin_read_own` for admins or `clients_super_admin_all` for
+super-admins. See `.claude-context/10_auth_model.md` section 3.7 and
+section 5.1 for the SPA-side data flow.
 
 ## handle_new_user
 

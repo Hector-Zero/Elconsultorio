@@ -151,6 +151,12 @@ Identical structure but mirrored module IDs:
 - Mitigation: a hard rule in the system prompt instructs the bot to decline reschedule requests and direct patients to call the centro directly. (Pending — see `08_known_gaps.md`.)
 - Future: a `cancel_booking` Edge Function + structured intent detection.
 
+### Why two-stage clients.config hydration in the SPA
+
+- The SPA fetches centro config in two stages, not one. Pre-login, `useClientBootstrap` calls the SECURITY DEFINER function `get_public_centro_info(p_slug)` which exposes only a narrow display whitelist (id, slug, name, theme_id, modo_empresa, empresa_nombre, brand_name, avatar_url, modules). Post-login, `useClientConfig` fetches the full `clients.config` jsonb via the admin-only `clients_admin_read_own` policy.
+- Why split: anon visitors and pro-mode users need display data (theme, branding, sidebar nav) without seeing sensitive keys (empresa contact info, integration secrets, gap-46 feature toggles). The pre-2026-05-07 single-stage `useClient` exposed everything to anon via `clients_public_lookup` — closed by items 50/51 hardening.
+- See `.claude-context/10_auth_model.md` section 5.1 for the data-flow specifics; `08_known_gaps.md` items 50, 51, 46 for the threat model.
+
 ## Idempotency strategy in `create_booking_atomic`
 
 The RPC uses an advisory lock keyed on `(client_id, professional_id, datetime)` to prevent race conditions on the same slot. If a `chat_id` already has an active appointment for the SAME slot, the RPC returns the existing booking instead of creating a duplicate (idempotent retry behavior). However, a different slot (different professional or different datetime) is treated as a fresh booking — which is what allowed the "accidental reschedule" double-booking case.

@@ -256,6 +256,37 @@ Four gotchas to know about:
    `role` are set. `users.full_name` stays NULL after trigger fires —
    populate manually if needed for display.
 
+### 3.7 `get_public_centro_info(p_slug text)`
+
+```sql
+RETURNS TABLE (id uuid, slug text, name text, theme_id text,
+               modo_empresa text, empresa_nombre text,
+               brand_name text, avatar_url text, modules jsonb)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO 'public', 'pg_catalog'
+```
+
+Resolves a centro slug to its safe-public display subset for the SPA
+bootstrap path (anon callers and pro-mode authenticated users that the
+admin-only policies don't cover). Reads from `public.clients`, returns
+only the whitelisted display keys plus the centro id and slug.
+
+Defined in
+[20260507120000_clients_professionals_auth_hardening_additive.sql](supabase/migrations/20260507120000_clients_professionals_auth_hardening_additive.sql)
+with the corrected return shape in
+[20260507120100_correct_clients_professionals_hardening.sql](supabase/migrations/20260507120100_correct_clients_professionals_hardening.sql).
+
+Granted EXECUTE to both `anon` and `authenticated`. Excludes
+`config.features` (gap 46 superadmin toggles), `config.empresa.{rut,
+email, telefono, direccion, logo_url}`, `config.profile_*`,
+`config.whatsapp_*`, `config.resend_from`, and other operational
+keys. The full clients row is reachable only via
+`clients_admin_read_own` for admins or `clients_super_admin_all`
+for super-admins.
+
+Consumed by `src/lib/useClientBootstrap.js`. See section 5.1 for the
+SPA-side data flow.
+
 ## 4. RLS pattern in policies
 
 Every policy on every public-schema table follows one of four shapes.
@@ -284,6 +315,18 @@ Tables using this pattern: `agents_config`, `appointments`, `conversions`,
 `users`. Plus an indirect form via EXISTS-subquery for tables that don't
 carry `client_id` directly: `professional_documents`, `professional_schedules`,
 `professional_session_types` (each reaches client_id through `professionals`).
+
+The 2026-05-07 RLS hardening session (items 50/51) added two policies
+to this pattern's footprint: `clients_admin_read_own` (SELECT for
+admins of the centro) and `professionals_authenticated_read_active`
+(SELECT for any authenticated user of the centro, scoped to active
+professionals). Both replaced over-permissive anon policies
+(`clients_public_lookup` and `professionals_public_read_active`) that
+were dropped in
+[20260507130000_drop_legacy_anon_policies.sql](supabase/migrations/20260507130000_drop_legacy_anon_policies.sql).
+The replacement strategy used the SECURITY DEFINER function pattern
+(see section 3.7) for the anon path that previously relied on the
+permissive policies.
 
 ### Pattern 2 — Pro-scoped (`my_professional_id()`)
 
@@ -366,19 +409,45 @@ either way, but the UI needs to know up-front to render the right
 sidebar items, the right screen permissions, and the right per-screen
 chrome.
 
-### Step 1 — URL slug → `clientId`
+### Step 1 — URL slug → `clientId` (two-stage hydration)
 
-[src/lib/useClient.js](src/lib/useClient.js) reads `window.location.hostname`,
-extracts a slug (or falls back to `VITE_DEV_CLIENT_SLUG` for local dev),
-and queries `public.clients` by slug to get the centro's `id` and
-`config`. The result populates `ClientCtx.clientId` for every
-downstream consumer.
+[src/lib/useClientBootstrap.js](src/lib/useClientBootstrap.js) reads
+`window.location.hostname`, extracts a slug (or falls back to
+`VITE_DEV_CLIENT_SLUG` for local dev), and calls the SECURITY DEFINER
+function `get_public_centro_info(p_slug)` (see section 3.7). The
+function returns a narrow display subset: `id`, `slug`, `name`,
+`theme_id`, `modo_empresa`, `empresa_nombre`, `brand_name`,
+`avatar_url`, `modules`. The SPA's bootstrap context
+(`ClientCtx.clientId`, theme application, sidebar branding) all flow
+from this single fetch.
 
 This step is **independent of authentication** — anonymous visitors
-also need `clientId` to render the public profile (eventual
-`cliente.elconsultorio.cl`). The `clients_public_lookup` policy
-(`USING (true)` for `{anon, authenticated}`) supports this — and
-exposes more than it should; see gap 50.
+also need `clientId` to render the eventual public profile page
+(cliente.elconsultorio.cl) and consume the same display keys. The
+SECURITY DEFINER function bypasses RLS to expose the whitelist
+regardless of caller role.
+
+Pre-cutover (before 2026-05-07), this step read `public.clients`
+directly via the now-dropped `clients_public_lookup` policy, exposing
+the full row to anon callers — see resolved gap 50 in
+[08_known_gaps.md](.claude-context/08_known_gaps.md).
+
+Post-login, [src/lib/useClientConfig.js](src/lib/useClientConfig.js)
+fires a separate fetch for the full `clients.config` jsonb via the
+admin-only `clients_admin_read_own` policy. Admins receive the full
+row including sensitive keys (empresa contact info, integration
+secrets, gap-46 feature toggles) and write back via `setConfig` plus
+`mergeClientConfig`. Pros' `useClientConfig` fetch returns no rows
+(PostgREST signals PGRST116; the hook handles via `.maybeSingle()`
+and reports `config: null`). Pro-mode UI consumes only the bootstrap
+display subset; the empty post-login fetch is gap-60 territory until
+a pro-specific Ajustes view is designed.
+
+The two stages run in parallel on page load: bootstrap fires
+immediately (anon-callable, no session needed), and the post-login
+fetch fires when both `session` and `bootstrap.clientId` resolve.
+App.jsx's loading gate waits on both `bootstrap.loading` and the
+session/professional resolution before rendering.
 
 ### Step 2 — `(clientId, auth.uid())` → `professional`
 
@@ -777,11 +846,22 @@ becomes operational.
 3. Eventually build the superadmin dashboard UI to flip toggles
    visually instead of by SQL.
 
-Coordinates with [gap 50](.claude-context/08_known_gaps.md) (clients.config
-exposure) — the bootstrap-safe subset of `config` exposed to anon must
-NOT include `features`, since toggle values are themselves sensitive
-information (knowing which centros have which features enabled is recon
-data for targeted attacks).
+Coordinates with resolved [gap 50](.claude-context/08_known_gaps.md)
+(clients.config exposure to anon, closed 2026-05-07): the bootstrap
+subset returned by `get_public_centro_info(p_slug)` (section 3.7)
+explicitly excludes `config.features`, so toggle values never leak to
+anon visitors or to pro-mode authenticated users. Admin-only
+`clients_admin_read_own` is the single read path for the full
+`clients.config` jsonb; admins of an admin-grant centro see toggle
+values, all other roles do not.
+
+Coordinates also with [gap 67](.claude-context/08_known_gaps.md) (admin-
+owner vs admin-receptionist clinical authority distinction). The
+planned `is_admin_with_clinical_authority(p_client_id)` helper combines
+admin role + professional link + this section's centro toggle. Without
+gap 67's helper, the gap-46 toggle is too coarse — once a centro grants
+admin clinical access, all admins (including receptionists) inherit it.
+Tackle gap 67 in the same session as gap 46's first toggle implementation.
 
 ## 9. Cross-references and out-of-scope notes
 
@@ -798,6 +878,17 @@ data for targeted attacks).
   — table grants on 20 objects + function EXECUTE on 8 functions
 - [20260506000300_add_missing_updated_at_triggers.sql](supabase/migrations/20260506000300_add_missing_updated_at_triggers.sql)
   — adds `set_clinical_notes_updated_at` and `set_patient_assignments_updated_at`
+- [20260507120000_clients_professionals_auth_hardening_additive.sql](supabase/migrations/20260507120000_clients_professionals_auth_hardening_additive.sql)
+  — items 50/51 phase 1: `get_public_centro_info` SECURITY DEFINER
+  function, `clients_authenticated_read_own` (later corrected),
+  `professionals_authenticated_read_active`
+- [20260507120100_correct_clients_professionals_hardening.sql](supabase/migrations/20260507120100_correct_clients_professionals_hardening.sql)
+  — corrections to the function whitelist (added brand_name,
+  avatar_url, modules) and the clients policy (renamed/scoped to
+  admin-only via `clients_admin_read_own`)
+- [20260507130000_drop_legacy_anon_policies.sql](supabase/migrations/20260507130000_drop_legacy_anon_policies.sql)
+  — drops `clients_public_lookup` and `professionals_public_read_active`,
+  closing items 50/51
 
 **Related context docs:**
 
@@ -814,17 +905,24 @@ data for targeted attacks).
 **Gap entries touching auth** (in `08_known_gaps.md`):
 
 - ✅ Resolved: 40 (RLS-as-code baseline), 41 (test pro provisioning),
-  53 (missing updated_at triggers), 21 (write path verified during 41)
-- HIGH priority open: 42 (this doc — closes when this lands), 50
-  (clients_public_lookup exposure), 51 (professionals_public_read_active
-  exposure), 55 (default ACL not migration-captured), 56 (RPC migrations
-  lack explicit GRANT EXECUTE)
-- MEDIUM priority open: 52 (appointments_professional_own DELETE), 57
-  (patients_professional_active_assignment FOR ALL), 58 (users_admin_write
-  allows DELETE), 59-63 (pro mode UX cluster from item 41 smoke test)
+  42 (this doc), 50 (clients_public_lookup exposure, closed 2026-05-07),
+  51 (professionals_public_read_active exposure, anon half closed
+  2026-05-07; deferred public function rolled into gap 66), 53 (missing
+  updated_at triggers), 21 (write path verified during 41)
+- HIGH priority open: 55 (default ACL not migration-captured), 56 (RPC
+  migrations lack explicit GRANT EXECUTE)
+- MEDIUM priority open: 46 (centro feature toggles, planned), 52
+  (appointments_professional_own DELETE), 57
+  (patients_professional_active_assignment FOR ALL), 58
+  (users_admin_write allows DELETE), 59-63 (pro mode UX cluster), 66
+  (professionals data model refactor), 67 (admin-owner clinical
+  authority distinction)
 - LOW priority open: 54 (`my_client_id` and `handle_new_user` lack
-  `search_path`), 64 (BOT ACTIVO sidebar block visible to pros)
-- Forward-looking: 46 (centro feature toggles — see section 8)
+  `search_path`), 64 (BOT ACTIVO sidebar block visible to pros), 65
+  (professionals.user_id no UNIQUE — folded into gap 66), 68 (SPA
+  effect-dep hygiene)
+- Forward-looking: 46 + 67 jointly (centro feature toggles +
+  clinical-authority helper)
 
 **Session log entries** with architectural decisions:
 
@@ -833,6 +931,12 @@ data for targeted attacks).
   — covers items 40, 41, 42 as a continuous arc; documents the
   feature-toggles decision; locks in the pro-mode-routing
   two-lists pattern lesson (commit `0684d84`)
+- [09_session_log.md](.claude-context/09_session_log.md) entry
+  `2026-05-07 — Items 50/51 RLS hardening + β architecture cutover`
+  — covers the six-commit β cutover, captures architectural
+  decisions about two-stage SPA hydration, locks in
+  `config.features` admin-only invariant, surfaces gaps 66/67/68,
+  documents the data-vs-presentation split that informs gap 66
 
 ### 9.2 Out-of-scope notes
 

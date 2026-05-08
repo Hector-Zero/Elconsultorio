@@ -4,6 +4,188 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
+## 2026-05-07 — Items 50/51 RLS hardening + β architecture cutover
+
+Six-commit closure of the two RLS exposure gaps that surfaced during
+item 40's baseline discovery, plus a coordinated SPA architectural
+migration (β cutover) replacing the conflated `useClient` /
+`ClientCtx.config` path with separate bootstrap and full-config hooks.
+
+### Items resolved
+
+- ✅ Gap 50 (`clients_public_lookup` exposes clients.config to anon):
+  resolved. Replaced with `get_public_centro_info(p_slug)` SECURITY
+  DEFINER function exposing only the safe-public display whitelist
+  (id, slug, name, theme_id, modo_empresa, empresa_nombre, brand_name,
+  avatar_url, modules), plus admin-only `clients_admin_read_own`
+  policy for full config jsonb. Old policy dropped.
+
+- ✅ Gap 51 (`professionals_public_read_active` exposes email +
+  user_id to anon): partially resolved. Anon exposure closed via
+  `professionals_authenticated_read_active` (authenticated, scoped
+  to caller's client_id). The eventual `get_public_professionals(
+  p_slug)` for the public profile page is deferred to gap 66's
+  data-model session, since the whitelist depends on the planned
+  `professional_profiles` vs `professional_employments` split.
+
+### Six-commit β cutover sequence
+
+| # | Hash | Purpose |
+|---|---|---|
+| 1 | `ced25c4` | Parallel auth-hardening infrastructure: SECURITY DEFINER function, new policies, new SPA hooks (`useClientBootstrap`, `useClientConfig`), new `ClientConfigCtx` |
+| 2 | `1e08cc0` | Sidebar reads display keys from `useClientBootstrap` |
+| 3 | `1ce2322` | App.jsx self-migration (theme effect, profileIncomplete derivation, loading gate) |
+| 4 | `590bfed` | Settings (×6) + agenda.jsx consumer migration |
+| 5 | `6a04e64` | Drop legacy anon policies; delete useClient.js; close gaps 50/51 |
+
+### Architectural decisions locked in
+
+1. **Two-stage SPA config hydration.** Pre-login, `useClientBootstrap`
+   fetches the safe-public subset via the SECURITY DEFINER function.
+   Post-login (admin only), `useClientConfig` fetches the full clients
+   row via the admin-only policy. Pros consume only the bootstrap
+   subset; their `useClientConfig` fetch returns null (handled
+   gracefully via `.maybeSingle()`). This formalizes the read-only
+   anon path vs the read-write admin path that the previous single-
+   stage `useClient` had conflated.
+
+2. **`config.features` (gap 46 toggles) stays admin-only.** The
+   bootstrap whitelist explicitly excludes the `features` jsonb
+   subkey. Superadmin-controlled centro toggles (e.g.,
+   `admin_can_view_clinical_notes`) never leak to anon visitors or
+   to pro-mode authenticated users. Keeps gap 46's threat model
+   intact.
+
+3. **`public_profile` is centro-owned, not pro-owned.** Per Hector
+   2026-05-07: the centro decides which professionals are featured
+   on the eventual public profile page after offline agreement
+   between centro and professional. This influences gap 66's table-
+   split design — `public_profile` belongs in
+   `professional_employments`, not `professional_profiles`.
+
+4. **Admin role is not monolithic.** Centro admins split into admin-
+   owners (licensed psychologists, clinical authority per Ley
+   20.584) and admin-receptionists (operations only, no clinical
+   sight). The data model implicitly distinguishes them via the
+   professionals/professional_profiles `user_id` link. New gap 67
+   captures this — implementation is `is_admin_with_clinical_authority(
+   p_client_id)` helper combining admin role + professional link +
+   centro toggle.
+
+5. **Effect-driven duplicate fetches are tolerable in the cutover
+   window.** Three independent `useClientBootstrap` calls (App.jsx,
+   Sidebar, agenda.jsx) and `useClientConfig`'s double-fire on login
+   are aesthetic concerns, not bugs. Captured as gap 68 for a future
+   effect-dep hygiene pass.
+
+### New gaps logged
+
+- **Gap 66** — Professionals data model refactor (MEDIUM priority).
+  Split `public.professionals` into `professional_profiles` (pro-
+  owned, presentation) and `professional_employments` (centro-
+  owned, operational). Resolves gap 65, refines gap 57, completes
+  deferred half of gap 51. Tackle as one focused session.
+
+- **Gap 67** — Admin-owner vs admin-receptionist clinical authority
+  (MEDIUM priority). Refines gap 46. Requires gap 66's data model
+  for clean implementation.
+
+- **Gap 68** — SPA effect-dep hygiene (LOW priority). Both
+  multiplexing patterns from this session (`useClientBootstrap` ×3
+  per page, `useClientConfig` ×2 per login) are aesthetic; tackle
+  in a focused pass when needed.
+
+### Discoveries during the session
+
+1. **Sidebar's reliance on `clients_public_lookup`** wasn't
+   immediately obvious. The pre-existing policy was the *only* read
+   path for `clients.config` for any role in the SPA — pros'
+   sidebar (modules, brand_name, avatar_url) depended on it.
+   Dropping it without first migrating Sidebar to bootstrap would
+   have broken pro-mode UI. Surfaced during commit 5 planning.
+
+2. **`useClientConfig` for pros returns PGRST116** (PostgREST
+   "Cannot coerce result to single JSON object" — zero rows).
+   Hook handles correctly via `.maybeSingle()`. Visible as red-X
+   in network panel; not a SPA crash. Verified in commit 6 smoke
+   test.
+
+3. **Theme effect race condition under β migration.** Original
+   draft of commit 4 left `if (!config) return` guard inside the
+   theme effect that depended on `bootstrap.themeId`. If bootstrap
+   resolved first, guard rejected (config still null), theme bailed,
+   and a later config-resolution wouldn't re-fire the effect since
+   `[bootstrap.themeId]` hadn't changed. Result would have been
+   silent default-theme fallback on some page loads. Code flagged
+   pre-commit; guard removed in EDIT 6 of commit 4 (since
+   `getTheme(null)` safely returns the default).
+
+4. **`config.modo_empresa` reads in agenda.jsx must come from
+   bootstrap, not config.** agenda.jsx renders for both admin and
+   pro modes. Reading `modo_empresa` from `useClientConfig` would
+   make pros silently see "single mode" (since their fetch returns
+   null), but `modo_empresa` is centro state — same regardless of
+   role. Bootstrap's anon-callable function returns the same value
+   for any caller. This decision shaped commit 5's split: 6
+   settings files use `useClientConfig` (admin-only), agenda.jsx
+   uses `useClientBootstrap` (any role).
+
+### Migration files captured
+
+- `20260507120000_clients_professionals_auth_hardening_additive.sql`
+  — initial parallel infrastructure (function, two new policies).
+  Captured AS originally drafted, including the corrections that
+  followed.
+- `20260507120100_correct_clients_professionals_hardening.sql`
+  — corrections applied after the first migration ran (function
+  whitelist widened to include brand_name, avatar_url, modules;
+  `clients_authenticated_read_own` replaced with admin-only
+  `clients_admin_read_own`).
+- `20260507130000_drop_legacy_anon_policies.sql`
+  — final drops closing the cutover.
+
+The two-file capture for the same logical migration (one initial,
+one correction) is unusual but honest — the production DB went
+through both states. Future fresh-environment runs apply both files
+in sequence.
+
+### Strategic position update
+
+Items 50 and 51 were the highest-priority RLS exposure items
+remaining after the items 40/41/42 closure on 2026-05-06/07. With
+both resolved (50 fully, 51 the anon half), the SPA's auth surface
+is now hardened against the anon-enumeration attack vectors gap 50
+flagged. Centro feature toggles (gap 46) when implemented will not
+leak to non-admin users.
+
+Vitalis launch readiness: still bounded by Phase 3 work (Mercado
+Pago integration, Vitalis-specific onboarding, super-admin
+dashboard for toggle management), not by RLS. Gap 66 (data model
+refactor) and gap 67 (admin-owner distinction) are valuable
+architectural cleanups but not launch blockers — the current
+single-table model works, and the absence of the admin-owner
+distinction means the gap-46 toggle just hasn't shipped yet.
+
+### Recommended next sessions
+
+1. **Gap 66 (data model refactor)** — biggest standalone win.
+   Resolves multiple smaller gaps (57, 65), enables clean
+   implementation of gaps 51 (deferred half), 67. One focused
+   session, ~item-40 scope.
+
+2. **Gap 46 + gap 67 jointly** — implement centro feature toggles
+   alongside the admin-owner clinical-authority helper. Both
+   touch the auth model and `notes_admin_with_consent` policy.
+
+3. **Items 59-64 pro-mode UX cluster** — deferred since item 41.
+   Cleaner once gap 60 (pro-mode Ajustes content) has a clear
+   target after gap 66's data split.
+
+4. **Gap 68 effect-dep hygiene** — defer until performance
+   audits or unrelated effect-dep cleanup pulls it into scope.
+
+---
+
 ## 2026-05-05 → 2026-05-07 — Tier 1 closure + architectural alignment
 
 Continued the dashboard-first strategic refocus from earlier 2026-05-05
