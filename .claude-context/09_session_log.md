@@ -4,6 +4,155 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
+## 2026-05-08 — Gaps 55/56 closure: deadline-driven default-ACL alignment
+
+Five-phase session closing the two HIGH-priority RLS gaps remaining
+after items 50/51. Reconnaissance surfaced a Supabase platform deadline
+(October 30, 2026) that reframed gap 55's fix path; the session shipped
+both gaps' resolution plus the project's first dedicated convention doc.
+
+### Items resolved
+
+- ✅ Gap 55 (default ACL configuration not captured in migrations):
+  resolved by pre-applying Supabase's October 30 revoke ourselves rather
+  than capturing the deprecated current state. Project ACL state now
+  matches what the platform will produce on October 30; fresh
+  environments provisioned today produce identical state.
+
+- ✅ Gap 56 (RPC migrations lacking explicit GRANT EXECUTE): resolved
+  by amending 5 historical migrations to include grants alongside
+  function definitions, plus establishing the convention in a new
+  `.claude-context/migration-conventions.md` doc.
+
+### Five-phase commit sequence
+
+| # | Hash | Phase | Purpose |
+|---|---|---|---|
+| 1 | (no commit) | Recon | Inventoried 9 RPC functions, queried production pg_default_acl, read Supabase docs to confirm defaults are platform-supplied with October 30 deprecation date |
+| 2 | `fc8ba47` | Audit + amend | Added GRANT EXECUTE statements to 5 historical RPC migrations; standardized service_role inclusion across all function grants |
+| 3 | `c662fa1` | Deadline alignment | Pre-applied Supabase's planned ALTER DEFAULT PRIVILEGES REVOKE on tables and sequences |
+| 4 | (this commit) | Convention doc | Created `.claude-context/migration-conventions.md` documenting GRANT requirements for future migrations |
+| 5 | (this commit) | Wrap-up | Gap closures, session log, auth model cross-refs |
+
+### Architectural decisions locked in
+
+1. **Mirror the platform announcement exactly.** Phase 3's revoke
+   migration covers tables + sequences only (not functions),
+   postgres role only (not supabase_admin), public schema only.
+   Going beyond Supabase's stated scope would be overreach without
+   benefit — function defaults are independently rescued by
+   PostgreSQL's PUBLIC EXECUTE default that we don't (and can't
+   reasonably) revoke.
+
+2. **Convention over centralization for grants going forward.** The
+   `baseline_grants.sql` precedent (item 40 commit D) was a one-time
+   sweep capturing pre-existing function grants in a single file.
+   Going forward, each function-defining migration includes its own
+   grants — the migration is self-contained. The convention doc
+   captures this. The `baseline_grants.sql` file remains in place as
+   harmless redundancy; removing it would be churn for no benefit.
+
+3. **Per-file type-alias consistency over codebase-wide normalization.**
+   `int`/`integer` and `timestamptz`/`timestamp with time zone` are
+   PostgreSQL aliases that resolve to the same OID. GRANT statements
+   should match the form used in the file's own CREATE FUNCTION
+   declaration. Reading any single migration top-to-bottom should
+   show coherent style.
+
+4. **Trigger functions get the standard grant for consistency.**
+   `set_updated_at` and `handle_new_user` are trigger-only and
+   technically don't need EXECUTE grants from anon/authenticated/
+   service_role. Granting them anyway matches the existing
+   `baseline_grants.sql` precedent and avoids per-function judgment
+   calls about who can invoke what. Harmless redundancy preferred
+   over selective grants.
+
+### Discoveries during the session
+
+1. **The October 30, 2026 platform deadline.** Surfaced during Phase 1
+   recon when reading Supabase's docs and changelog. Reframed gap 55's
+   fix path entirely — original intent was to "capture current
+   defaults," but capturing a state that's about to be revoked would
+   document deprecated behavior. New approach: run the revoke ourselves,
+   ahead of the platform.
+
+2. **Function defaults are NOT in Supabase's October 30 revoke.** The
+   announcement covers only tables and sequences. Functions retain
+   auto-applied defaults plus PostgreSQL's PUBLIC EXECUTE built-in.
+   This means function-grant discipline cannot rely on platform
+   revocation; it depends entirely on the convention doc and per-
+   migration discipline.
+
+3. **CREATE OR REPLACE FUNCTION preserves grants.** PostgreSQL doesn't
+   reset privileges when a function is replaced. Discovered while
+   planning Phase 2 — initially worried that `get_bot_context`'s
+   four update migrations would each need their own GRANT statement.
+   Verified the original creation migration's grant persists across
+   replacements.
+
+4. **REVOKE without matching GRANT is a silent no-op.** Documented in
+   PostgreSQL's ALTER DEFAULT PRIVILEGES docs. This made Phase 3
+   safer than initially feared — even if our revoke statements
+   slightly mismatched the platform's auto-applied defaults, the
+   unmatched portions would no-op rather than error.
+
+5. **`get_public_centro_info` grant inconsistency.** Recon caught that
+   the function (added in items 50/51 session) was granted to
+   anon+authenticated only, while every other function in the codebase
+   grants to all three roles including service_role. Added service_role
+   to the grant during Phase 2 amend for consistency. service_role
+   bypasses RLS but still needs EXECUTE permissions to call functions
+   from edge-function or platform contexts.
+
+### New gaps logged
+
+None. The session closed two HIGH-priority gaps without surfacing new
+ones. The convention doc captures all forward-looking discipline.
+
+### Files changed
+
+- 5 RPC migrations amended (Phase 2): get_bot_context, create_booking_atomic,
+  baseline_helper_functions, two clients/professionals hardening migrations.
+- 1 new migration created (Phase 3): align_with_future_default_acl.sql.
+- 1 new convention doc created (Phase 4): migration-conventions.md.
+- 3 context docs updated (Phase 5): 08_known_gaps.md, 09_session_log.md,
+  10_auth_model.md.
+
+### Strategic position update
+
+Gaps 55 and 56 closed. The HIGH-priority open list in `08_known_gaps.md`
+is now empty. All RLS exposure and migration-completeness gaps that
+surfaced during item 40's baseline are resolved.
+
+Remaining work follows your stated priority path: gap 66 (professionals
+data model refactor) → gap 67 (admin-owner clinical authority helper) →
+public profile page. None are launch-blocking; all are architectural
+cleanups before adding the public-facing surface.
+
+### Recommended next sessions
+
+1. **Gap 66 (professionals data model refactor)** — biggest standalone
+   architectural session. Splits `public.professionals` into
+   `professional_profiles` (pro-owned) and `professional_employments`
+   (centro-owned). Resolves gaps 65 and 57, completes the deferred
+   half of gap 51. ~item-40-shaped scope.
+
+2. **Gap 67 (admin-owner vs admin-receptionist)** — smaller, depends on
+   gap 66's data model. Implements the
+   `is_admin_with_clinical_authority(p_client_id)` helper that
+   gap 46's centro feature toggles need to be production-correct.
+
+3. **Public profile page** — the original motivating goal. Build on
+   top of gap 66's split. Includes a new SECURITY DEFINER function
+   `get_public_professionals(p_slug)` that completes gap 51's deferred
+   work.
+
+4. **Polish phase** — items 59-64 pro-mode UX cluster, gap 63 (Apariencia
+   save bug), gap 68 (effect-dep hygiene). After the architectural
+   foundation is solid.
+
+---
+
 ## 2026-05-07 — Items 50/51 RLS hardening + β architecture cutover
 
 Six-commit closure of the two RLS exposure gaps that surfaced during

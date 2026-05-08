@@ -242,74 +242,51 @@ function's safe-public field set.
 
 ### 55. Default ACL configuration not captured in migrations (2026-05-06)
 
-Surfaced during item 40 commit D verification. The public schema has
-configured default ACLs (visible via pg_default_acl) that grant
-{postgres, anon, authenticated, service_role} default permissions on
-new tables, sequences, and functions. PostgreSQL's built-in default
-also grants EXECUTE TO PUBLIC on new functions.
+✅ Resolved 2026-05-08 (commit c662fa1). Approach changed mid-session
+based on the discovery that Supabase will revoke these defaults on
+October 30, 2026 (per the platform changelog). Rather than capture
+the deprecated current default in a migration, the project pre-applied
+the platform's planned revoke ourselves via `20260508120000_align_with_future_default_acl.sql`,
+which runs `ALTER DEFAULT PRIVILEGES ... REVOKE` matching exactly what
+Supabase will run. Result: a fresh environment provisioned today
+produces identical state to one provisioned after October 30; the
+project no longer depends on platform-supplied default privileges.
 
-These default ACLs are NOT in any migration. If a fresh environment
-is set up without the same defaults configured, the migrations would
-create the schema objects but the runtime behavior would differ —
-for example, functions created without TO PUBLIC might fail
-permission checks for some Supabase auth flows.
+Scope deliberately limited to mirror the platform announcement: postgres
+role only (not supabase_admin), public schema only, tables + sequences
+only (functions excluded — the platform's October 30 migration doesn't
+revoke function defaults, and PostgreSQL's PUBLIC EXECUTE default on
+new functions remains regardless). See migration header for verification
+state details.
 
-The current pg_default_acl state for owner=postgres in the public
-schema:
-
-- Tables (r): postgres + anon + authenticated + service_role get
-  arwdDxtm
-- Functions (f): postgres + anon + authenticated + service_role get
-  X (EXECUTE)
-- Sequences (S): postgres + anon + authenticated + service_role get
-  rwU
-
-Plus an identical-shaped set for owner=supabase_admin.
-
-Side note on commit D framing: D's commit message described the 8
-function grants as "Dashboard-authored separately from creating
-migrations." That framing is slightly wrong — those grants would
-have been auto-applied via these default ACLs even without
-Dashboard intervention. D's behavior is correct (the explicit
-GRANT statements are harmless re-statements of what defaults
-produce), only the message's mental model was off. Not worth
-amending; tracking the underlying issue here.
-
-Fix path: capture the ALTER DEFAULT PRIVILEGES statements that
-produced these ACLs as a baseline migration. Investigation needed
-to determine whether Supabase's project setup applies these
-defaults automatically (in which case the migration documents what
-the platform provides), or whether they were configured for this
-specific project (in which case the migration restores them on a
-fresh setup).
-
-Coordinate with item 40's broader RLS-as-code work — defaults are
-foundational infrastructure that everything else assumes.
-
-Don't address now. Track for future hardening pass.
+Coordinated with gap 56's Phase 2 amends (commit fc8ba47), which made
+all existing RPC functions self-contained with explicit GRANT EXECUTE
+statements before the revoke would have left them dependent on defaults.
 
 ### 56. RPC function migrations don't include explicit GRANT EXECUTE statements (2026-05-06)
 
-Surfaced during item 40 commit D drafting. Both
-create_booking_atomic and get_bot_context migrations create their
-respective functions but don't include explicit GRANT EXECUTE
-statements. Production has the right grants because Supabase's
-default ACLs apply automatically (anon/authenticated/service_role
-get EXECUTE on new public functions) plus PostgreSQL's built-in
-PUBLIC default. But this means future RPC function migrations
-could ship without explicit grants and still "work" in
-production, hiding the dependency on default ACLs.
+✅ Resolved 2026-05-08 (commits fc8ba47 and migration-conventions.md
+in the wrap-up commit). Two-part fix:
 
-Coordinated with item 55 (default ACL not captured): if defaults
-ever change, every function in the codebase that relies on them
-silently fails permission checks.
+(1) Audited all 9 RPC functions in the codebase and amended their
+    defining migrations to include explicit GRANT EXECUTE statements
+    alongside CREATE OR REPLACE FUNCTION. Each migration is now
+    self-contained — the function and its grants travel together.
+    Five files amended: 20260501230000 (get_bot_context), 20260502100000
+    (create_booking_atomic), 20260506000000 (six baseline helpers),
+    plus 20260507120000 and 20260507120100 (added service_role to
+    get_public_centro_info grants for consistency).
 
-Fix path: establish a migration template/convention for new RPC
-functions that includes explicit GRANT EXECUTE statements
-alongside CREATE OR REPLACE FUNCTION. Audit existing RPC
-migrations and add the missing grants to make them robust against
-default ACL changes. Document in .claude-context/01_architecture.md
-or a new migration-conventions.md.
+(2) Established the convention in `.claude-context/migration-conventions.md`:
+    every new public-schema table or function migration must include
+    explicit GRANT statements; the standard role list is anon,
+    authenticated, service_role; type-alias choice should match the
+    file's own CREATE statement; CREATE OR REPLACE doesn't reset
+    grants so update migrations don't need to re-state them.
+
+Coordinated with resolved gap 55 (commit c662fa1) which removed the
+default-ACL safety net these explicit grants now operate independently
+of.
 
 ---
 

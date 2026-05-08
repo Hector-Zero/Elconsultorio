@@ -889,6 +889,13 @@ Tackle gap 67 in the same session as gap 46's first toggle implementation.
 - [20260507130000_drop_legacy_anon_policies.sql](supabase/migrations/20260507130000_drop_legacy_anon_policies.sql)
   — drops `clients_public_lookup` and `professionals_public_read_active`,
   closing items 50/51
+- [20260508120000_align_with_future_default_acl.sql](supabase/migrations/20260508120000_align_with_future_default_acl.sql)
+  — pre-applies Supabase's October 30, 2026 ALTER DEFAULT PRIVILEGES
+  REVOKE on tables and sequences in public schema. Project ACL state
+  now matches the post-deadline platform default. Gap 55 closure.
+- Plus 5 historical RPC migrations amended in commit fc8ba47 to add
+  explicit GRANT EXECUTE statements (gap 56 closure): 20260501230000,
+  20260502100000, 20260506000000, 20260507120000, 20260507120100.
 
 **Related context docs:**
 
@@ -905,12 +912,14 @@ Tackle gap 67 in the same session as gap 46's first toggle implementation.
 **Gap entries touching auth** (in `08_known_gaps.md`):
 
 - ✅ Resolved: 40 (RLS-as-code baseline), 41 (test pro provisioning),
-  42 (this doc), 50 (clients_public_lookup exposure, closed 2026-05-07),
-  51 (professionals_public_read_active exposure, anon half closed
-  2026-05-07; deferred public function rolled into gap 66), 53 (missing
-  updated_at triggers), 21 (write path verified during 41)
-- HIGH priority open: 55 (default ACL not migration-captured), 56 (RPC
-  migrations lack explicit GRANT EXECUTE)
+  42 (auth model doc), 50 (clients_public_lookup, closed 2026-05-07),
+  51 (professionals_public_read_active, anon half closed 2026-05-07;
+  deferred public function rolled into gap 66), 53 (missing updated_at
+  triggers), 21 (write path verified during 41), 55 (default ACL not
+  migration-captured, closed 2026-05-08 via deadline-aligned revoke),
+  56 (RPC migrations lacking GRANT EXECUTE, closed 2026-05-08 via
+  audit-and-amend plus convention doc)
+- HIGH priority open: (none)
 - MEDIUM priority open: 46 (centro feature toggles, planned), 52
   (appointments_professional_own DELETE), 57
   (patients_professional_active_assignment FOR ALL), 58
@@ -922,7 +931,8 @@ Tackle gap 67 in the same session as gap 46's first toggle implementation.
   (professionals.user_id no UNIQUE — folded into gap 66), 68 (SPA
   effect-dep hygiene)
 - Forward-looking: 46 + 67 jointly (centro feature toggles +
-  clinical-authority helper)
+  clinical-authority helper); gap 66 prerequisite for public profile
+  page
 
 **Session log entries** with architectural decisions:
 
@@ -937,6 +947,12 @@ Tackle gap 67 in the same session as gap 46's first toggle implementation.
   decisions about two-stage SPA hydration, locks in
   `config.features` admin-only invariant, surfaces gaps 66/67/68,
   documents the data-vs-presentation split that informs gap 66
+- [09_session_log.md](.claude-context/09_session_log.md) entry
+  `2026-05-08 — Gaps 55/56 closure: deadline-driven default-ACL alignment`
+  — five-phase closure of the two HIGH-priority gaps remaining after
+  items 50/51, including pre-applied Supabase October 30 default-ACL
+  revoke and the new migration-conventions.md doc establishing
+  GRANT requirements going forward.
 
 ### 9.2 Out-of-scope notes
 
