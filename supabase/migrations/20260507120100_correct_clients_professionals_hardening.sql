@@ -59,7 +59,7 @@ $function$;
 COMMENT ON FUNCTION public.get_public_centro_info(text) IS
   'Returns safe-public subset of clients row for SPA bootstrap (anon) and pro-mode display (authenticated non-admin). Whitelist documented in migration 20260507120000. Coordinates with gaps 50, 46.';
 
-GRANT EXECUTE ON FUNCTION public.get_public_centro_info(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_public_centro_info(text) TO anon, authenticated, service_role;
 
 DROP POLICY clients_authenticated_read_own ON public.clients;
 

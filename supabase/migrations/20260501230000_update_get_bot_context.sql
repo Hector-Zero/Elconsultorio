@@ -186,3 +186,5 @@ COMMENT ON FUNCTION public.get_bot_context(uuid, text) IS
   'professional, services_offered (with effective custom price), and per-pro '
   'schedules. carry-over blocks (slots_disponibles, lead, facturas_pendientes) '
   'must be reconciled with the prior function definition before applying.';
+
+GRANT EXECUTE ON FUNCTION public.get_bot_context(uuid, text) TO anon, authenticated, service_role;

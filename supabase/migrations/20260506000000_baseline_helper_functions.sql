@@ -120,3 +120,11 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION handle_new_user();
+
+
+GRANT EXECUTE ON FUNCTION public.my_client_id()                  TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.my_professional_id()            TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_admin_of_client(uuid)        TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_super_admin()                TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.set_updated_at()                TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.handle_new_user()               TO anon, authenticated, service_role;

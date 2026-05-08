@@ -229,3 +229,5 @@ COMMENT ON FUNCTION public.create_booking_atomic(uuid, uuid, timestamptz, uuid, 
   'patient upsert, assignment, appointment insert, and lead update in a single '
   'transaction. Returns a structured jsonb result; the Edge Function maps that to '
   'HTTP status codes.';
+
+GRANT EXECUTE ON FUNCTION public.create_booking_atomic(uuid, uuid, timestamptz, uuid, int, text, text, jsonb) TO anon, authenticated, service_role;
