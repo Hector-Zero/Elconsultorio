@@ -5,7 +5,8 @@
 // All DB work — slot lock, patient upsert, assignment, appointment insert,
 // lead update — runs inside a single Postgres transaction via the
 // `create_booking_atomic` RPC defined in
-// supabase/migrations/20260502T1000_create_booking_atomic.sql.
+// supabase/migrations/20260502100000_create_booking_atomic.sql (original) and
+// 20260509130000_rewrite_rpc_functions_for_split.sql (post-gap-66 rewrite).
 //
 // Auth: bearer must equal the project secret API key (sb_secret_...) which
 // is auto-populated into SUPABASE_SERVICE_ROLE_KEY for the Edge Function.
@@ -14,11 +15,13 @@
 // so the platform doesn't pre-validate as user JWT.
 //
 // Name-fallback resolution: callers may provide either an ID or a name for
-// professional and session_type. If only a name is given, this function
-// looks it up scoped to client_id (active=true) using a case-insensitive
-// substring match — so "individual" matches "Consulta individual", "pareja"
-// matches "Consulta de pareja", etc. Ambiguous matches (2+) surface as a
-// 400 so the caller can re-ask.
+// the employment (was professional pre-gap-66) and session_type. If only a
+// name is given, this function looks it up scoped to client_id (active=true)
+// using a case-insensitive substring match - so "Camila" matches the
+// employment of "Camila Reyes" at this centro, "individual" matches "Consulta
+// individual", etc. Names live on professional_profiles; the resolver joins
+// through professional_employments to scope by client and active status.
+// Ambiguous matches (2+) surface as a 400 so the caller can re-ask.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
@@ -55,7 +58,7 @@ const STATUS_BY_ERR: Record<string, number> = {
 
 type ResolveResult = { id: string } | { error: string }
 
-async function resolveProfessional(
+async function resolveEmployment(
   admin: SupabaseClient,
   client_id: string,
   name: string,
@@ -68,20 +71,22 @@ async function resolveProfessional(
   const escaped = trimmed.replace(/[\\%_]/g, (c) => `\\${c}`)
   const pattern = `%${escaped}%`
 
+  // Names live on professional_profiles; we resolve to an employment id
+  // by joining through professional_employments scoped to this centro.
   const { data, error } = await admin
-    .from('professionals')
-    .select('id, full_name')
+    .from('professional_employments')
+    .select('id, professional_profiles!inner(full_name)')
     .eq('client_id', client_id)
     .eq('active', true)
-    .ilike('full_name', pattern)
+    .ilike('professional_profiles.full_name', pattern)
     .limit(2)
 
-  if (error) return { error: `professional lookup failed: ${error.message}` }
+  if (error) return { error: `employment lookup failed: ${error.message}` }
   if (!data || data.length === 0) {
-    return { error: `no professional matches "${trimmed}"` }
+    return { error: `no professional matches "${trimmed}" at this centro` }
   }
   if (data.length > 1) {
-    return { error: `multiple professionals match "${trimmed}"` }
+    return { error: `multiple professionals match "${trimmed}" at this centro` }
   }
   return { id: data[0].id }
 }
@@ -144,7 +149,7 @@ Deno.serve(async (req) => {
   const {
     client_id,
     chat_id,
-    professional_id,
+    employment_id,
     professional_name,
     datetime,
     session_type_id,
@@ -157,11 +162,11 @@ Deno.serve(async (req) => {
   if (!client_id || typeof client_id !== 'string') return fail('client_id required')
   if (!chat_id   || typeof chat_id   !== 'string') return fail('chat_id required')
 
-  // Either professional_id or professional_name must be present.
-  const hasProId   = typeof professional_id   === 'string' && professional_id.length   > 0
-  const hasProName = typeof professional_name === 'string' && professional_name.length > 0
-  if (!hasProId && !hasProName) {
-    return fail('professional_id or professional_name required')
+  // Either employment_id or professional_name must be present.
+  const hasEmploymentId = typeof employment_id     === 'string' && employment_id.length     > 0
+  const hasProName      = typeof professional_name === 'string' && professional_name.length > 0
+  if (!hasEmploymentId && !hasProName) {
+    return fail('employment_id or professional_name required')
   }
 
   if (!datetime || typeof datetime !== 'string') return fail('datetime required')
@@ -189,19 +194,19 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  let resolvedProId: string
-  if (hasProId) {
-    resolvedProId = professional_id
-    console.log('[create-booking] professional_id provided directly')
+  let resolvedEmploymentId: string
+  if (hasEmploymentId) {
+    resolvedEmploymentId = employment_id
+    console.log('[create-booking] employment_id provided directly')
   } else {
-    const result = await resolveProfessional(admin, client_id, professional_name)
+    const result = await resolveEmployment(admin, client_id, professional_name)
     if ('error' in result) {
-      console.warn('[create-booking] professional resolution failed', result.error)
+      console.warn('[create-booking] employment resolution failed', result.error)
       return fail(result.error)
     }
-    resolvedProId = result.id
-    console.log('[create-booking] resolved professional_name to id', {
-      name: professional_name, id: resolvedProId,
+    resolvedEmploymentId = result.id
+    console.log('[create-booking] resolved professional_name to employment_id', {
+      name: professional_name, id: resolvedEmploymentId,
     })
   }
 
@@ -225,12 +230,12 @@ Deno.serve(async (req) => {
 
   // ── Call RPC ────────────────────────────────────────────────────────────
   console.log('[create-booking] calling create_booking_atomic', {
-    client_id, professional_id: resolvedProId, datetime, chat_id,
+    client_id, employment_id: resolvedEmploymentId, datetime, chat_id,
   })
 
   const { data, error } = await admin.rpc('create_booking_atomic', {
     p_client_id:       client_id,
-    p_professional_id: resolvedProId,
+    p_employment_id:   resolvedEmploymentId,
     p_datetime:        datetime,            // pass through; Postgres parses with offset
     p_session_type_id: resolvedSessionId,
     p_duration:        duration_minutes,
