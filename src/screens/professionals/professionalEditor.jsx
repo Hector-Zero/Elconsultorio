@@ -302,23 +302,35 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           }
         }
       } else {
-        // New pro — RPC creates profile + employment atomically, then
-        // UPDATE adds the optional fields the form has captured.
-        const { data: rpcResult, error: rpcErr } = await supabase.rpc(
-          'create_professional_at_centro',
+        // New pro — invite-professional Edge Function creates profile +
+        // employment atomically AND sends the invite email. UPDATE below
+        // adds the optional fields the form has captured.
+        const { data: invResult, error: invErr } = await supabase.functions.invoke(
+          'invite-professional',
           {
-            p_client_id: clientId,
-            p_full_name: basic.full_name.trim(),
-            p_email:     basic.email.trim(),
-            p_color:     basic.color,
+            body: {
+              client_id: clientId,
+              full_name: basic.full_name.trim(),
+              email:     basic.email.trim(),
+              color:     basic.color,
+            }
           }
         )
-        if (rpcErr) throw new Error(`Datos · ${rpcErr.message}`)
-        if (!rpcResult?.success) {
-          throw new Error(`Datos · ${rpcResult?.message ?? 'No se pudo crear el profesional'}`)
+        if (invErr) throw new Error(`Invitación · ${invErr.message}`)
+        if (!invResult?.success) {
+          // Map the Edge Function's error codes to user-readable messages.
+          const code = invResult?.error
+          const msg  = invResult?.message ?? 'No se pudo crear/invitar al profesional'
+          if (code === 'email_collision') {
+            throw new Error(`Email · ${msg}`)
+          }
+          if (code === 'forbidden') {
+            throw new Error(`Permisos · ${msg}`)
+          }
+          throw new Error(`Datos · ${msg}`)
         }
-        employmentId = rpcResult.employment_id
-        profileId    = rpcResult.profile_id
+        employmentId = invResult.employment_id
+        profileId    = invResult.profile_id
 
         // Apply the rest of the form to the freshly created rows.
         const { error: empErr } = await supabase
@@ -378,7 +390,10 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       setSaving(false)
 
       if (wasNew) {
-        flashToast?.({ kind: 'ok', msg: '✓ Profesional creado. Ahora puedes subir foto y documentos.' }, 3500)
+        flashToast?.({
+          kind: 'ok',
+          msg:  `✓ Profesional invitado. Recibirá un email en ${basic.email.trim()} para activar su cuenta.`,
+        }, 4500)
         // Stay open in edit mode so the user can upload photo/docs.
       } else {
         flashToast?.({ kind: 'ok', msg: '✓ Guardado' })
@@ -390,35 +405,14 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     }
   }
 
-  // Outer wrapper: modal backdrop (default) vs inline panel (self mode).
-  const Wrapper = ({ children }) => isSelfMode ? (
-    <div style={{
-      width: '100%', maxWidth: 720, margin: '0 auto', padding: '24px 16px 40px',
-      fontFamily: T.sans,
-    }}>
-      <div style={{
-        background: T.bgRaised, borderRadius: 14, border: `1px solid ${T.line}`,
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}>{children}</div>
-    </div>
-  ) : (
-    <div onClick={() => !saving && onClose()} style={{
-      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.45)',
-      display: 'grid', placeItems: 'center', zIndex: 60, padding: 16,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: '100%', maxWidth: 720, maxHeight: '90vh',
-        background: T.bgRaised, borderRadius: 14,
-        boxShadow: '0 24px 60px rgba(20,18,14,0.28)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        fontFamily: T.sans,
-      }}>{children}</div>
-    </div>
-  )
-
-  return (
-    <Wrapper>
-      <>
+  // Editor body — shared across both render shells (self-mode inline,
+  // admin-mode modal backdrop). Stored as a JSX element rather than a
+  // closure component so React's reconciliation doesn't unmount on
+  // every render (closure components produce a new function reference
+  // per render, which React treats as a different component type and
+  // remounts — losing input focus on every keystroke).
+  const body = (
+    <>
         <div style={{
           padding: '18px 22px 14px', borderBottom: `1px solid ${T.lineSoft}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -559,7 +553,31 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           </button>
         </div>
       </>
-    </Wrapper>
+  )
+
+  return isSelfMode ? (
+    <div style={{
+      width: '100%', maxWidth: 720, margin: '0 auto', padding: '24px 16px 40px',
+      fontFamily: T.sans,
+    }}>
+      <div style={{
+        background: T.bgRaised, borderRadius: 14, border: `1px solid ${T.line}`,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>{body}</div>
+    </div>
+  ) : (
+    <div onClick={() => !saving && onClose()} style={{
+      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.45)',
+      display: 'grid', placeItems: 'center', zIndex: 60, padding: 16,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', maxWidth: 720, maxHeight: '90vh',
+        background: T.bgRaised, borderRadius: 14,
+        boxShadow: '0 24px 60px rgba(20,18,14,0.28)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        fontFamily: T.sans,
+      }}>{body}</div>
+    </div>
   )
 }
 

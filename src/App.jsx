@@ -8,6 +8,7 @@ import { flattenEmployment } from './lib/flattenEmployment.js'
 import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
 import Login from './Login.jsx'
+import ClaimModal from './ClaimModal.jsx'
 import LeadsScreen         from './screens/leads.jsx'
 import AgendaScreen        from './screens/agenda.jsx'
 import PatientsScreen      from './screens/patients.jsx'
@@ -126,6 +127,12 @@ export default function App() {
   }
 
   if (!session) return <Login />
+
+  // Pro claim flow: if user has invite_pending metadata, force them
+  // through the password-set modal before they can use the SPA.
+  if (session?.user?.user_metadata?.invite_pending === true) {
+    return <ClaimModal session={session} />
+  }
 
   const isPro = !!professional
 
