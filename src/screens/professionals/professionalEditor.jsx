@@ -283,8 +283,13 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           .eq('id', employmentId)
         if (empErr) throw new Error(`Empleo · ${empErr.message}`)
 
-        // Profile UPDATE only if unclaimed (RLS gate also enforces this).
-        if (pro?.user_id == null) {
+        // Profile UPDATE: permitted when the caller is the claimant
+        // themselves (self mode, RLS profiles_self_all covers it) or
+        // when the profile is unclaimed (admin path, RLS
+        // profiles_admin_update_unclaimed covers it). Mirrors the
+        // profileLocked UI gate elsewhere in this file.
+        const canWriteProfile = isSelfMode || pro?.user_id == null
+        if (canWriteProfile) {
           const profilePatch = {
             full_name:        basic.full_name.trim(),
             photo_url:        profile.photo_url || null,
@@ -298,7 +303,10 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
             .update(profilePatch)
             .eq('id', profileId)
           if (profErr) {
-            throw new Error(`Perfil · ${profErr.message}. Posiblemente el profesional ya reclamó su cuenta.`)
+            const hint = isSelfMode
+              ? `Perfil · ${profErr.message}`
+              : `Perfil · ${profErr.message}. Posiblemente el profesional ya reclamó su cuenta.`
+            throw new Error(hint)
           }
         }
       } else {
