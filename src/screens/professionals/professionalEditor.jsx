@@ -15,7 +15,12 @@ const textInput = {
 }
 
 // ───── Editor modal ─────
-export default function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, onNavigateToSettings, flashToast }) {
+export default function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, onNavigateToSettings, flashToast, mode }) {
+  // mode === 'self': rendered as a pro's own self-edit view (e.g., from
+  // settings/profile.jsx for empresa-mode pros). Skips the modal
+  // backdrop, hides close X + Cancelar button, retitles the header.
+  // Default (mode unset): admin-modal behavior with backdrop click-to-close.
+  const isSelfMode = mode === 'self'
   // Track the "current" pro so a freshly-created professional flips the modal
   // into edit mode (unlocking photo + document uploads).
   const [pro, setPro] = useState(initialPro)
@@ -47,11 +52,12 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
-  // True when the pro has claimed their profile (auth user linked).
-  // Per RLS profiles_admin_update_unclaimed: admins can only edit
-  // profile fields when user_id IS NULL. SPA mirrors this client-side
-  // so the form fields visibly disable rather than silently failing.
-  const profileLocked = pro?.user_id != null
+  // Lock identity fields when the profile is claimed by SOMEONE ELSE.
+  // The claimant editing their own profile (mode === 'self') should
+  // never be locked — RLS profiles_self_all permits self-writes
+  // regardless of user_id state. The lock targets admins editing
+  // pros they don't own.
+  const profileLocked = !isSelfMode && pro?.user_id != null
 
   // Load full pro fields (bio/specialties/etc were not selected in the list query).
   // Joins employment → profile and flattens to the canonical SPA shape.
@@ -384,7 +390,18 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     }
   }
 
-  return (
+  // Outer wrapper: modal backdrop (default) vs inline panel (self mode).
+  const Wrapper = ({ children }) => isSelfMode ? (
+    <div style={{
+      width: '100%', maxWidth: 720, margin: '0 auto', padding: '24px 16px 40px',
+      fontFamily: T.sans,
+    }}>
+      <div style={{
+        background: T.bgRaised, borderRadius: 14, border: `1px solid ${T.line}`,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>{children}</div>
+    </div>
+  ) : (
     <div onClick={() => !saving && onClose()} style={{
       position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.45)',
       display: 'grid', placeItems: 'center', zIndex: 60, padding: 16,
@@ -395,23 +412,31 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         boxShadow: '0 24px 60px rgba(20,18,14,0.28)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         fontFamily: T.sans,
-      }}>
+      }}>{children}</div>
+    </div>
+  )
+
+  return (
+    <Wrapper>
+      <>
         <div style={{
           padding: '18px 22px 14px', borderBottom: `1px solid ${T.lineSoft}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ fontFamily: T.serif, fontSize: 22, color: T.ink, lineHeight: 1 }}>
-            {pro ? 'Editar profesional' : 'Nuevo profesional'}
+            {isSelfMode ? 'Mi perfil' : (pro ? 'Editar profesional' : 'Nuevo profesional')}
           </div>
-          <button
-            onClick={() => !saving && onClose()}
-            disabled={saving}
-            aria-label="Cerrar"
-            style={{
-              background: 'transparent', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
-              color: T.inkMuted, fontSize: 22, lineHeight: 1, padding: 4,
-            }}
-          >×</button>
+          {!isSelfMode && (
+            <button
+              onClick={() => !saving && onClose()}
+              disabled={saving}
+              aria-label="Cerrar"
+              style={{
+                background: 'transparent', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+                color: T.inkMuted, fontSize: 22, lineHeight: 1, padding: 4,
+              }}
+            >×</button>
+          )}
         </div>
 
         <div style={{ flex: 1, overflow: 'auto', padding: '20px 22px 24px' }}>
@@ -526,13 +551,15 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         }}>
           {error && <div style={{ flex: 1, fontSize: 12, color: T.danger, lineHeight: 1.4 }}>{error}</div>}
           {!error && <div style={{ flex: 1 }} />}
-          <button onClick={onClose} style={btn('ghost')} disabled={saving}>Cancelar</button>
+          {!isSelfMode && (
+            <button onClick={onClose} style={btn('ghost')} disabled={saving}>Cancelar</button>
+          )}
           <button onClick={handleSave} style={btn('primary')} disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </Wrapper>
   )
 }
 

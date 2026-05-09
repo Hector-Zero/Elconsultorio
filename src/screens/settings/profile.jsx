@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
 import { syncSchedules } from '../../lib/syncSchedules.js'
+import ProfessionalEditor from '../professionals/professionalEditor.jsx'
 import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 // ───── Profile — wired to clients.config (primary_color, resend_from, avatar_url, session_types) ─────
@@ -14,9 +15,10 @@ const DEFAULT_SESSION_TYPES = [
 ]
 
 export default function ProfileSettings({ onDirtyChange }) {
-  const { clientId, refreshFirstPro } = useContext(ClientCtx)
+  const { clientId, professional, refreshFirstPro } = useContext(ClientCtx)
   const { config, setConfig } = useContext(ClientConfigCtx)
   const empresaMode = !!config?.modo_empresa
+  const isPro = !!professional
 
   const [name,         setName]         = useState(config?.profile_name    ?? '')
   const [title,        setTitle]        = useState(config?.profile_title   ?? '')
@@ -257,6 +259,21 @@ export default function ProfileSettings({ onDirtyChange }) {
 
 
   const displayName = name || ''
+
+  // Pro-mode in empresa centros: this screen's centro-admin fields
+  // (RUT, SSS, Email del remitente, Teléfono, Dirección) don't apply
+  // to a treating pro. Render the canonical pro-self-edit view instead.
+  if (isPro && empresaMode) {
+    return (
+      <ProfessionalEditor
+        clientId={clientId}
+        initialPro={professional}
+        mode="self"
+        onClose={() => {}}
+        onChanged={() => { refreshFirstPro?.() }}
+      />
+    )
+  }
 
   return (
     <div style={{ padding: '24px 32px 40px', maxWidth: 780 }}>
