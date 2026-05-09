@@ -4,6 +4,8 @@ import { ClientCtx } from '../../lib/ClientCtx.js'
 import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
+import { flattenEmployment } from '../../lib/flattenEmployment.js'
+import { syncSchedules } from '../../lib/syncSchedules.js'
 import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 // ───── Profile — wired to clients.config (primary_color, resend_from, avatar_url, session_types) ─────
@@ -155,55 +157,96 @@ export default function ProfileSettings({ onDirtyChange }) {
     }
     setConfig(mergedConfig)
 
-    // Mirror profile fields + availability to the (possibly missing) first professional row.
-    console.log('[profile-save] BEFORE professionals.select', { clientId })
-    const { data: pros, error: selErr } = await supabase.from('professionals')
-      .select('id, email').eq('client_id', clientId).eq('active', true).order('created_at').limit(1)
-    console.log('[profile-save] AFTER professionals.select', { rows: pros?.length ?? 0, error: selErr })
-    if (selErr) { setSaving(false); setSaveStatus('error'); return }
+    // Single-mode auto-mirror: ensure a professional_employments row
+    // exists for this admin's centro, with their identity data.
+    const { data: empRow } = await supabase
+      .from('professional_employments')
+      .select(`
+        id, client_id, color, email, active,
+        professional_profiles!inner(id, user_id, full_name)
+      `)
+      .eq('client_id', clientId)
+      .eq('active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
 
-    const existing = pros?.[0]
-    const proPatch = {}
-    if (trimmedName) {
-      proPatch.full_name = trimmedName
-      proPatch.initials  = initials(trimmedName)
-      proPatch.email     = resendFrom || existing?.email || ''
-    }
-    if (availability) proPatch.availability = availability
+    const existing = flattenEmployment(empRow)
+
+    let employmentId
+    let profileId
 
     if (existing) {
-      // Row exists → UPDATE
-      if (Object.keys(proPatch).length) {
-        console.log('[profile-save] BEFORE professionals.update', { id: existing.id, proPatch })
-        const { error: updErr } = await supabase.from('professionals').update(proPatch).eq('id', existing.id)
-        console.log('[profile-save] AFTER professionals.update', { error: updErr })
-        if (updErr) { setSaving(false); setSaveStatus('error'); return }
+      employmentId = existing.id
+      profileId = existing.profile_id
+
+      // UPDATE profile (full_name) only if unclaimed.
+      if (existing.user_id === null && trimmedName !== existing.full_name) {
+        const { error: profErr } = await supabase
+          .from('professional_profiles')
+          .update({ full_name: trimmedName })
+          .eq('id', profileId)
+        if (profErr) {
+          console.warn('[profile.jsx] profile update failed', profErr)
+        }
+      }
+
+      // UPDATE employment (email) — always allowed for centro admin.
+      const empPatch = {}
+      if (resendFrom !== existing.email) empPatch.email = resendFrom || null
+      if (Object.keys(empPatch).length > 0) {
+        const { error: empErr } = await supabase
+          .from('professional_employments')
+          .update(empPatch)
+          .eq('id', employmentId)
+        if (empErr) {
+          console.warn('[profile.jsx] employment update failed', empErr)
+        }
       }
     } else {
-      // No row → INSERT seed (this is what makes the table have its first row)
-      const seed = {
-        client_id:    clientId,
-        full_name:    proPatch.full_name || trimmedName || '',
-        initials:     proPatch.initials  || initials(trimmedName || ''),
-        email:        proPatch.email     || resendFrom || '',
-        color:        PRO_COLORS[0],
-        active:       true,
-        availability: availability || DEFAULT_AVAILABILITY,
+      // First-time creation: use the RPC for atomic two-table INSERT.
+      const { data: rpcResult, error: rpcErr } = await supabase.rpc(
+        'create_professional_at_centro',
+        {
+          p_client_id: clientId,
+          p_full_name: trimmedName,
+          p_email:     resendFrom || '',
+          p_color:     PRO_COLORS[0],
+        }
+      )
+      if (rpcErr || !rpcResult?.success) {
+        console.warn('[profile.jsx] create_professional_at_centro failed', rpcErr ?? rpcResult)
+        setSaving(false); setSaveStatus('error'); return
       }
-      console.log('[profile-save] BEFORE professionals.insert', { seed })
-      const { data: ins, error: insErr } = await supabase.from('professionals').insert(seed).select().single()
-      console.log('[profile-save] AFTER professionals.insert', { id: ins?.id, error: insErr })
-      if (insErr) { setSaving(false); setSaveStatus('error'); return }
-      if (ins?.id) {
-        // Adopt any orphan appointments so the calendar is consistent.
-        console.log('[profile-save] BEFORE appointments.update (adopt orphans)', { proId: ins.id })
-        const { error: adoptErr } = await supabase.from('appointments')
-          .update({ professional_id: ins.id })
-          .eq('client_id', clientId)
-          .is('professional_id', null)
-        console.log('[profile-save] AFTER appointments.update', { error: adoptErr })
+      employmentId = rpcResult.employment_id
+      profileId    = rpcResult.profile_id
+    }
+
+    // Sync schedules to the employment.
+    if (availability) {
+      const { data: schedRows } = await supabase
+        .from('professional_schedules')
+        .select('id, day_of_week, start_time, end_time')
+        .eq('employment_id', employmentId)
+
+      const { error: schedErr } = await syncSchedules(
+        supabase,
+        employmentId,
+        availability,
+        schedRows ?? []
+      )
+      if (schedErr) {
+        console.warn('[profile.jsx] schedule sync failed', schedErr)
       }
     }
+
+    // Adopt orphan appointments (employment_id IS NULL) as belonging to
+    // the admin's employment.
+    await supabase
+      .from('appointments')
+      .update({ employment_id: employmentId })
+      .eq('client_id', clientId)
+      .is('employment_id', null)
 
     refreshFirstPro?.() // always run — banner clears immediately on first save too
     if (availability) setInitialAvailability(availability)
@@ -361,28 +404,49 @@ function PerfilDisponibilidad({ clientId, config, availability, onAvailabilityLo
     if (!clientId) return
     let alive = true
     ;(async () => {
-      let row = null
+      let av = DEFAULT_AVAILABILITY
       try {
-        console.log('[disponibilidad] BEFORE professionals.select', { clientId })
-        const { data, error } = await supabase
-          .from('professionals')
-          .select('*')
+        const { data: empRow2 } = await supabase
+          .from('professional_employments')
+          .select('id, professional_profiles!inner(id, user_id, full_name)')
           .eq('client_id', clientId)
           .eq('active', true)
-          .order('created_at')
+          .order('created_at', { ascending: true })
           .limit(1)
-        console.log('[disponibilidad] AFTER professionals.select', { rows: data?.length ?? 0, error })
-        if (!alive) return
-        row = data?.[0] || null
-        // Don't auto-seed here — empty table is fine; show the default form and let
-        // handleSave() create the row on first save. This keeps the UI responsive
-        // even if RLS blocks inserts from this read-side effect.
+          .maybeSingle()
+
+        if (empRow2?.id) {
+          const { data: schedRows2 } = await supabase
+            .from('professional_schedules')
+            .select('day_of_week, start_time, end_time')
+            .eq('employment_id', empRow2.id)
+            .eq('active', true)
+
+          // Build the legacy single-range-per-day shape from rows, so the
+          // existing UI can bind to it. Multi-range schedules surface as
+          // the first matching row per day.
+          const dowKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+          const next = {}
+          for (const key of Object.keys(DEFAULT_AVAILABILITY)) {
+            const idx = dowKeys.indexOf(key)
+            const r = (schedRows2 ?? []).find(s => s.day_of_week === idx)
+            if (r) {
+              next[key] = {
+                start:     String(r.start_time).slice(0, 5),
+                end:       String(r.end_time).slice(0, 5),
+                available: true,
+              }
+            } else {
+              next[key] = { ...DEFAULT_AVAILABILITY[key], available: false }
+            }
+          }
+          av = next
+        }
       } catch (e) {
         console.error('[disponibilidad] fetch failed', e)
       } finally {
         if (alive) {
-          // Always populate parent + clear spinner, even on error or empty table.
-          onAvailabilityLoaded?.(row?.availability ?? DEFAULT_AVAILABILITY)
+          onAvailabilityLoaded?.(av)
           setLoading(false)
         }
       }

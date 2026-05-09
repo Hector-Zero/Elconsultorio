@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, Sidebar, TopBar, btn, ConfirmModal, MAX_PROS } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
+import { flattenEmployment } from '../lib/flattenEmployment.js'
 import ProCard             from './professionals/proCard.jsx'
 import ProfessionalEditor  from './professionals/professionalEditor.jsx'
 
@@ -22,8 +23,11 @@ export default function ProfessionalsScreen({ onNavigate }) {
     // working list. Real deletions are hard DELETEs guarded by a pre-check
     // (see startDelete + performDelete below).
     const { data, error } = await supabase
-      .from('professionals')
-      .select('id, full_name, email, color, photo_url, avatar_url, active, public_profile')
+      .from('professional_employments')
+      .select(`
+        id, client_id, color, email, active, public_profile,
+        professional_profiles!inner(id, user_id, full_name, photo_url)
+      `)
       .eq('client_id', clientId)
       .eq('active', true)
       .order('created_at', { ascending: true })
@@ -32,19 +36,20 @@ export default function ProfessionalsScreen({ onNavigate }) {
       setLoading(false)
       return
     }
-    setPros(data ?? [])
+    const flatPros = (data ?? []).map(flattenEmployment)
+    setPros(flatPros)
 
-    const ids = (data ?? []).map(p => p.id)
+    const ids = flatPros.map(p => p.id)
     if (ids.length) {
       const { data: scheds } = await supabase
         .from('professional_schedules')
-        .select('professional_id, day_of_week')
-        .in('professional_id', ids)
+        .select('employment_id, day_of_week')
+        .in('employment_id', ids)
         .eq('active', true)
       const map = {}
       for (const s of scheds ?? []) {
-        if (!map[s.professional_id]) map[s.professional_id] = new Set()
-        map[s.professional_id].add(s.day_of_week)
+        if (!map[s.employment_id]) map[s.employment_id] = new Set()
+        map[s.employment_id].add(s.day_of_week)
       }
       setScheduleDays(map)
     } else {
@@ -63,66 +68,79 @@ export default function ProfessionalsScreen({ onNavigate }) {
     setTimeout(() => setToast(null), ms)
   }
 
-  // Click X → run pre-check first. If the pro has any appointments or active
-  // patient assignments, surface a blocker modal explaining what to do. The
-  // appointments FK already enforces this at the DB level — we just want a
-  // friendly message instead of a Postgres error.
+  // Click X → run pre-check first. If the employment has active patient
+  // assignments OR future non-cancelled appointments, block the action and
+  // explain what to reassign. FKs SET NULL employment_id on delete, so
+  // we'd lose the link silently without this guard.
+  //
+  // Past appointments are deliberately allowed: deletion is fine for a pro
+  // who's leaving the centro and has only historical citas. The block only
+  // catches obligations that still need handling.
   async function startDelete(p) {
-    const [a, pa] = await Promise.all([
-      supabase
-        .from('appointments')
-        .select('id', { count: 'exact', head: true })
-        .eq('professional_id', p.id),
+    const nowIso = new Date().toISOString()
+    const [paRes, apRes] = await Promise.all([
       supabase
         .from('patient_assignments')
-        .select('id', { count: 'exact', head: true })
-        .eq('professional_id', p.id)
+        .select('*', { count: 'exact', head: true })
+        .eq('employment_id', p.id)
         .eq('status', 'active'),
+      supabase
+        .from('appointments')
+        .select('*', { count: 'exact', head: true })
+        .eq('employment_id', p.id)
+        .gt('datetime', nowIso)
+        .in('status', ['pending_payment', 'confirmed']),
     ])
-    if (a.error || pa.error) {
-      flashToast({ kind: 'err', msg: `Error al verificar dependencias: ${(a.error ?? pa.error).message}` }, 3500)
+    if (paRes.error || apRes.error) {
+      flashToast({
+        kind: 'err',
+        msg: `Error al verificar dependencias: ${(paRes.error ?? apRes.error).message}`,
+      }, 3500)
       return
     }
-    const apptCount = a.count ?? 0
-    const patCount  = pa.count ?? 0
-    if (apptCount > 0 || patCount > 0) {
-      setConfirmDel({ pro: p, blocker: { appointments: apptCount, patients: patCount } })
-    } else {
-      setConfirmDel({ pro: p })
+    const activeAssigCount = paRes.count ?? 0
+    const futureApptCount  = apRes.count ?? 0
+
+    if (activeAssigCount > 0 || futureApptCount > 0) {
+      const patPart  = activeAssigCount > 0
+        ? `${activeAssigCount} paciente${activeAssigCount === 1 ? '' : 's'} activo${activeAssigCount === 1 ? '' : 's'}`
+        : null
+      const apptPart = futureApptCount > 0
+        ? `${futureApptCount} cita${futureApptCount === 1 ? '' : 's'} próxima${futureApptCount === 1 ? '' : 's'}`
+        : null
+      const counts = [patPart, apptPart].filter(Boolean).join(' y ')
+      const action = activeAssigCount > 0 && futureApptCount > 0
+        ? 'Reasigna o cancela esos vínculos'
+        : activeAssigCount > 0
+          ? 'Reasigna esos pacientes'
+          : 'Cancela o reasigna esas citas'
+      flashToast({
+        kind: 'err',
+        msg: `No se puede quitar a ${p.full_name} del centro: tiene ${counts}. ${action} antes de quitarla del centro.`,
+      }, 5500)
+      return
     }
+
+    setConfirmDel({ pro: p })
   }
 
   async function performDelete(p) {
     setConfirmDel(null)
-    // 1. Storage cleanup. We list the pro's folder in each bucket and remove
-    //    every file, BEFORE the DB delete — so a storage failure aborts the
-    //    delete cleanly instead of leaving orphaned blobs. Storage remove is
-    //    idempotent so a second click after a partial failure works.
-    for (const bucket of ['professional-photos', 'professional-documents']) {
-      const { data: files, error: listErr } = await supabase.storage.from(bucket).list(p.id, { limit: 1000 })
-      if (listErr) {
-        flashToast({ kind: 'err', msg: `Error listando archivos (${bucket}): ${listErr.message}` }, 3500)
-        return
-      }
-      if (files?.length) {
-        const paths = files.map(f => `${p.id}/${f.name}`)
-        const { error: rmErr } = await supabase.storage.from(bucket).remove(paths)
-        if (rmErr) {
-          flashToast({ kind: 'err', msg: `Error borrando archivos (${bucket}): ${rmErr.message}` }, 3500)
-          return
-        }
-      }
-    }
-    // 2. DB delete. professional_schedules / professional_session_types /
-    //    professional_documents cascade. patient_assignments.professional_id
-    //    is set to NULL by the FK rule (notes preserved).
-    const { error } = await supabase.from('professionals').delete().eq('id', p.id)
+    // Delete the employment only. Profile + photos + documents are pro-owned
+    // and follow the person across centros — they survive the centro link
+    // breaking. professional_schedules and professional_session_types CASCADE
+    // with the employment. appointments and patient_assignments SET NULL on
+    // employment_id (history preserved).
+    const { error } = await supabase
+      .from('professional_employments')
+      .delete()
+      .eq('id', p.id)
     if (error) {
-      flashToast({ kind: 'err', msg: `Error al eliminar: ${error.message}` }, 3500)
+      flashToast({ kind: 'err', msg: `Error al quitar del centro: ${error.message}` }, 3500)
       return
     }
     setPros(list => list.filter(x => x.id !== p.id))
-    flashToast({ kind: 'ok', msg: '✓ Profesional eliminado' })
+    flashToast({ kind: 'ok', msg: '✓ Profesional quitado del centro' })
   }
 
   const limitReached = pros.length >= MAX_PROS
@@ -214,45 +232,16 @@ export default function ProfessionalsScreen({ onNavigate }) {
         />
       )}
 
-      {confirmDel && confirmDel.blocker && (
+      {confirmDel && (
         <ConfirmModal
-          title="No se puede eliminar"
-          description={renderBlockerBody(confirmDel.pro, confirmDel.blocker)}
-          confirmLabel="Entendido"
-          cancelLabel={null}
-          onCancel={() => setConfirmDel(null)}
-          onConfirm={() => setConfirmDel(null)}
-        />
-      )}
-
-      {confirmDel && !confirmDel.blocker && (
-        <ConfirmModal
-          title="¿Eliminar profesional?"
-          description={`${confirmDel.pro.full_name}. Esta acción es permanente y no se puede deshacer.`}
-          confirmLabel="Eliminar"
+          title="¿Quitar del centro?"
+          description={`${confirmDel.pro.full_name} dejará de aparecer en este centro. Su perfil personal (foto, biografía, certificados) se conserva.`}
+          confirmLabel="Quitar"
           variant="danger"
           onCancel={() => setConfirmDel(null)}
           onConfirm={() => performDelete(confirmDel.pro)}
         />
       )}
     </div>
-  )
-}
-
-// ───── Tiny shared bits ─────
-function renderBlockerBody(pro, blocker) {
-  const parts = []
-  if (blocker.appointments > 0) parts.push(`${blocker.appointments} cita${blocker.appointments === 1 ? '' : 's'} agendada${blocker.appointments === 1 ? '' : 's'}`)
-  if (blocker.patients > 0)     parts.push(`${blocker.patients} paciente${blocker.patients === 1 ? '' : 's'} asignado${blocker.patients === 1 ? '' : 's'}`)
-  return (
-    <>
-      <div>
-        <strong>{pro.full_name}</strong> tiene {parts.join(' y ')}. Antes de eliminar este profesional debes:
-      </div>
-      <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 22, lineHeight: 1.6 }}>
-        {blocker.appointments > 0 && <li>Reasignar o cancelar todas sus citas en la Agenda</li>}
-        {blocker.patients > 0     && <li>Reasignar sus pacientes a otro profesional</li>}
-      </ul>
-    </>
   )
 }

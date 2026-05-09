@@ -28,14 +28,14 @@ function docTypeLabel(t) {
   return DOC_TYPE_OPTIONS.find(o => o.value === t)?.label ?? t ?? '—'
 }
 
-export default function DocumentsSection({ professionalId, disabled }) {
+export default function DocumentsSection({ profileId, disabled }) {
   const [docs, setDocs]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError]       = useState(null)
 
   async function fetchDocs() {
-    if (!professionalId) {
+    if (!profileId) {
       setDocs([])
       setLoading(false)
       return
@@ -44,7 +44,7 @@ export default function DocumentsSection({ professionalId, disabled }) {
     const { data, error: err } = await supabase
       .from('professional_documents')
       .select('id, doc_type, title, file_url, file_path, issuer, issued_date, display_on_profile, display_order')
-      .eq('professional_id', professionalId)
+      .eq('profile_id', profileId)
       .order('display_order', { ascending: true })
       .order('created_at',    { ascending: true })
     if (err) {
@@ -56,7 +56,7 @@ export default function DocumentsSection({ professionalId, disabled }) {
     setLoading(false)
   }
 
-  useEffect(() => { fetchDocs() }, [professionalId])
+  useEffect(() => { fetchDocs() }, [profileId])
 
   async function deleteDoc(doc) {
     setError(null)
@@ -112,7 +112,7 @@ export default function DocumentsSection({ professionalId, disabled }) {
 
   async function addDoc(form) {
     setError(null)
-    if (!professionalId) {
+    if (!profileId) {
       setError('Guarda primero el profesional para subir documentos')
       return false
     }
@@ -121,7 +121,7 @@ export default function DocumentsSection({ professionalId, disabled }) {
     if (!DOC_TYPES.includes(form.file.type)) { setError('Formato no permitido (PDF, JPG, PNG)'); return false }
     if (form.file.size > DOC_MAX_BYTES)      { setError('Archivo excede 10 MB'); return false }
 
-    const path = `${professionalId}/${Date.now()}_${safeName(form.file.name)}`
+    const path = `${profileId}/${Date.now()}_${safeName(form.file.name)}`
     const { error: upErr } = await supabase.storage
       .from(DOC_BUCKET)
       .upload(path, form.file, { upsert: false, contentType: form.file.type })
@@ -129,7 +129,7 @@ export default function DocumentsSection({ professionalId, disabled }) {
     const { data: pub } = supabase.storage.from(DOC_BUCKET).getPublicUrl(path)
 
     const insertRow = {
-      professional_id:    professionalId,
+      profile_id:         profileId,
       doc_type:           form.doc_type,
       title:              form.title.trim(),
       file_url:           pub.publicUrl,
@@ -154,7 +154,7 @@ export default function DocumentsSection({ professionalId, disabled }) {
     return true
   }
 
-  if (!professionalId) {
+  if (!profileId) {
     return (
       <div style={{
         padding: 18, background: T.bgSunk, border: `1px dashed ${T.line}`, borderRadius: 10,

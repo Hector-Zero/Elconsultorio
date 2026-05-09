@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { T, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
+import { flattenEmployment } from '../../lib/flattenEmployment.js'
 import PhotoBioSection      from './photoBioSection.jsx'
 import ScheduleSection      from './scheduleSection.jsx'
 import SessionTypesSection  from './sessionTypesSection.jsx'
@@ -46,32 +47,50 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
+  // True when the pro has claimed their profile (auth user linked).
+  // Per RLS profiles_admin_update_unclaimed: admins can only edit
+  // profile fields when user_id IS NULL. SPA mirrors this client-side
+  // so the form fields visibly disable rather than silently failing.
+  const profileLocked = pro?.user_id != null
+
   // Load full pro fields (bio/specialties/etc were not selected in the list query).
+  // Joins employment → profile and flattens to the canonical SPA shape.
   useEffect(() => {
     if (!pro?.id) return
     let alive = true
     supabase
-      .from('professionals')
-      .select('full_name, email, color, active, photo_url, bio, specialties, education, years_experience, public_profile')
+      .from('professional_employments')
+      .select(`
+        id, client_id, color, email, active, public_profile,
+        professional_profiles!inner(
+          id, user_id, full_name, photo_url, bio, specialties,
+          education, years_experience, public_summary,
+          public_credentials, public_documents
+        )
+      `)
       .eq('id', pro.id)
-      .single()
-      .then(({ data }) => {
-        if (!alive || !data) return
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) { console.warn('[professionalEditor] load failed', error); return }
+        const flat = flattenEmployment(data)
+        if (!flat) return
+        setPro(flat)
         setBasic(b => ({
           ...b,
-          full_name: data.full_name ?? b.full_name,
-          email:     data.email     ?? b.email,
-          color:     data.color     ?? b.color,
-          active:    data.active != null ? !!data.active : b.active,
+          full_name: flat.full_name ?? b.full_name,
+          email:     flat.email     ?? b.email,
+          color:     flat.color     ?? b.color,
+          active:    flat.active != null ? !!flat.active : b.active,
         }))
         setProfile(p => ({
           ...p,
-          photo_url:        data.photo_url ?? '',
-          bio:              data.bio ?? '',
-          specialties:      Array.isArray(data.specialties) ? data.specialties : [],
-          education:        data.education ?? '',
-          years_experience: data.years_experience ?? null,
-          public_profile:   data.public_profile ?? true,
+          photo_url:        flat.photo_url ?? '',
+          bio:              flat.bio ?? '',
+          specialties:      Array.isArray(flat.specialties) ? flat.specialties : [],
+          education:        flat.education ?? '',
+          years_experience: flat.years_experience ?? null,
+          public_profile:   flat.public_profile ?? true,
         }))
       })
     return () => { alive = false }
@@ -98,13 +117,13 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         const r1 = await supabase
           .from('professional_schedules')
           .select('id, day_of_week, start_time, end_time, active')
-          .eq('professional_id', pro.id)
+          .eq('employment_id', pro.id)
           .eq('active', true)
         scheds = r1.data ?? []
         const r2 = await supabase
           .from('professional_session_types')
           .select('session_type_id, custom_price_amount, active')
-          .eq('professional_id', pro.id)
+          .eq('employment_id', pro.id)
           .eq('active', true)
         off = r2.data ?? []
       }
@@ -148,16 +167,22 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     return null
   }
 
-  async function syncSchedules(profId) {
+  // The editor uses its own row-id-stable diff rather than the shared
+  // src/lib/syncSchedules.js helper. The library is composite-key-stable
+  // (day_of_week|start|end), which churns row ids when slot times change.
+  // The editor's grid UX exposes per-row edits and benefits from id
+  // preservation; the shared helper is fine for create flows where no
+  // existing rows need preserving.
+  async function syncEditorSchedules(employmentId) {
     // Diff against scheduleOriginal: insert (no id), update (id with diff), delete (in original but not current).
     const currentIds = new Set(schedule.filter(r => r.id).map(r => r.id))
     const toDelete = scheduleOriginal.filter(o => !currentIds.has(o.id)).map(o => o.id)
     const toInsert = schedule.filter(r => !r.id).map(r => ({
-      professional_id: profId,
-      day_of_week:     r.day_of_week,
-      start_time:      r.start_time,
-      end_time:        r.end_time,
-      active:          true,
+      employment_id: employmentId,
+      day_of_week:   r.day_of_week,
+      start_time:    r.start_time,
+      end_time:      r.end_time,
+      active:        true,
     }))
     const toUpdate = schedule.filter(r => r.id).filter(r => {
       const orig = scheduleOriginal.find(o => o.id === r.id)
@@ -183,7 +208,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     }
   }
 
-  async function syncOffered(profId) {
+  async function syncOffered(employmentId) {
     const allKeys = new Set([...Object.keys(offered), ...Object.keys(offeredOriginal)])
     const toDelete = []
     const toInsert = []
@@ -195,10 +220,10 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       const origActive = !!orig?.active
       if (origActive && !curActive)     toDelete.push(k)
       else if (!origActive && curActive) toInsert.push({
-        professional_id:    profId,
-        session_type_id:    k,
+        employment_id:       employmentId,
+        session_type_id:     k,
         custom_price_amount: cur.custom_price_amount ?? null,
-        active:             true,
+        active:              true,
       })
       else if (curActive && origActive) {
         if ((cur.custom_price_amount ?? null) !== (orig.custom_price_amount ?? null)) {
@@ -210,7 +235,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       const { error } = await supabase
         .from('professional_session_types')
         .delete()
-        .eq('professional_id', profId)
+        .eq('employment_id', employmentId)
         .in('session_type_id', toDelete)
       if (error) throw new Error(`Servicios · eliminar: ${error.message}`)
     }
@@ -222,7 +247,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       const { error } = await supabase
         .from('professional_session_types')
         .update({ custom_price_amount: u.custom_price_amount })
-        .eq('professional_id', profId)
+        .eq('employment_id', employmentId)
         .eq('session_type_id', u.k)
       if (error) throw new Error(`Servicios · actualizar: ${error.message}`)
     }
@@ -235,50 +260,114 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     setSaving(true)
 
     try {
-      const proRow = {
-        client_id:        clientId,
-        full_name:        basic.full_name.trim(),
-        initials:         initials(basic.full_name),
-        email:            basic.email.trim(),
-        color:            basic.color,
-        active:           !!basic.active,
-        photo_url:        profile.photo_url || null,
-        bio:              profile.bio || null,
-        specialties:      Array.isArray(profile.specialties) ? profile.specialties : [],
-        education:        profile.education || null,
-        years_experience: profile.years_experience ?? null,
-        public_profile:   !!profile.public_profile,
-      }
+      let employmentId = pro?.id
+      let profileId    = pro?.profile_id
 
-      let saved
-      if (pro?.id) {
-        const { data, error } = await supabase
-          .from('professionals')
-          .update(proRow)
-          .eq('id', pro.id)
-          .select()
-          .single()
-        if (error) throw new Error(`Datos · ${error.message}`)
-        saved = data
+      if (employmentId) {
+        // Existing pro — partitioned UPDATEs.
+        const employmentPatch = {
+          email:          basic.email.trim() || null,
+          color:          basic.color,
+          active:         !!basic.active,
+          public_profile: !!profile.public_profile,
+        }
+        const { error: empErr } = await supabase
+          .from('professional_employments')
+          .update(employmentPatch)
+          .eq('id', employmentId)
+        if (empErr) throw new Error(`Empleo · ${empErr.message}`)
+
+        // Profile UPDATE only if unclaimed (RLS gate also enforces this).
+        if (pro?.user_id == null) {
+          const profilePatch = {
+            full_name:        basic.full_name.trim(),
+            photo_url:        profile.photo_url || null,
+            bio:              profile.bio || null,
+            specialties:      Array.isArray(profile.specialties) ? profile.specialties : [],
+            education:        profile.education || null,
+            years_experience: profile.years_experience ?? null,
+          }
+          const { error: profErr } = await supabase
+            .from('professional_profiles')
+            .update(profilePatch)
+            .eq('id', profileId)
+          if (profErr) {
+            throw new Error(`Perfil · ${profErr.message}. Posiblemente el profesional ya reclamó su cuenta.`)
+          }
+        }
       } else {
-        const { data, error } = await supabase
-          .from('professionals')
-          .insert(proRow)
-          .select()
-          .single()
-        if (error) throw new Error(`Datos · ${error.message}`)
-        saved = data
+        // New pro — RPC creates profile + employment atomically, then
+        // UPDATE adds the optional fields the form has captured.
+        const { data: rpcResult, error: rpcErr } = await supabase.rpc(
+          'create_professional_at_centro',
+          {
+            p_client_id: clientId,
+            p_full_name: basic.full_name.trim(),
+            p_email:     basic.email.trim(),
+            p_color:     basic.color,
+          }
+        )
+        if (rpcErr) throw new Error(`Datos · ${rpcErr.message}`)
+        if (!rpcResult?.success) {
+          throw new Error(`Datos · ${rpcResult?.message ?? 'No se pudo crear el profesional'}`)
+        }
+        employmentId = rpcResult.employment_id
+        profileId    = rpcResult.profile_id
+
+        // Apply the rest of the form to the freshly created rows.
+        const { error: empErr } = await supabase
+          .from('professional_employments')
+          .update({
+            active:         !!basic.active,
+            public_profile: !!profile.public_profile,
+          })
+          .eq('id', employmentId)
+        if (empErr) throw new Error(`Empleo · ${empErr.message}`)
+
+        const { error: profErr } = await supabase
+          .from('professional_profiles')
+          .update({
+            photo_url:        profile.photo_url || null,
+            bio:              profile.bio || null,
+            specialties:      Array.isArray(profile.specialties) ? profile.specialties : [],
+            education:        profile.education || null,
+            years_experience: profile.years_experience ?? null,
+          })
+          .eq('id', profileId)
+        if (profErr) throw new Error(`Perfil · ${profErr.message}`)
       }
 
-      await syncSchedules(saved.id)
-      await syncOffered(saved.id)
+      await syncEditorSchedules(employmentId)
+      await syncOffered(employmentId)
 
       // Refresh originals so subsequent saves diff cleanly.
       setScheduleOriginal(schedule.map(r => ({ ...r, id: r.id })))
       setOfferedOriginal(JSON.parse(JSON.stringify(offered)))
 
       const wasNew = !pro
-      setPro(saved)
+      // Update the local pro shape so the rest of the modal session sees
+      // the new ids + form values.
+      //
+      // TODO: this synthesis assumes no server-side triggers modify the
+      // updated rows. If triggers are added that mutate profile or
+      // employment fields on UPDATE, replace this synthesis with a re-SELECT
+      // through flattenEmployment to pick up the post-trigger values.
+      setPro({
+        id:             employmentId,
+        profile_id:     profileId,
+        user_id:        pro?.user_id ?? null,
+        client_id:      clientId,
+        full_name:      basic.full_name.trim(),
+        email:          basic.email.trim() || null,
+        color:          basic.color,
+        active:         !!basic.active,
+        public_profile: !!profile.public_profile,
+        photo_url:      profile.photo_url || null,
+        bio:            profile.bio || null,
+        specialties:    Array.isArray(profile.specialties) ? profile.specialties : [],
+        education:      profile.education || null,
+        years_experience: profile.years_experience ?? null,
+      })
       onChanged?.()
       setSaving(false)
 
@@ -335,7 +424,8 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
                 value={basic.full_name}
                 onChange={e => setBasic(b => ({ ...b, full_name: e.target.value }))}
                 placeholder="Dra. Paz Correa"
-                style={textInput}
+                disabled={profileLocked}
+                style={{ ...textInput, opacity: profileLocked ? 0.55 : 1 }}
               />
             </div>
             <div>
@@ -372,13 +462,26 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
 
           {/* SECTION 2 — PERFIL PÚBLICO */}
           <SectionLabel icon="user" label="Perfil público" />
+          {profileLocked && (
+            <div style={{
+              fontSize: 12, color: T.warn ?? T.danger,
+              padding: '8px 12px', marginBottom: 8,
+              background: T.dangerSoft ?? T.bgSunk,
+              border: `1px solid ${T.lineSoft}`, borderRadius: 8,
+            }}>
+              Este profesional ya reclamó su perfil — solo el dueño puede editar
+              identidad. Puedes seguir editando email, color y estado.
+            </div>
+          )}
+          {/* PhotoBioSection: photo lives on professional_profiles which is
+              RLS-gated by user_id IS NULL for admin writes. Lock matches RLS. */}
           <PhotoBioSection
             value={profile}
             onChange={setProfile}
-            professionalId={pro?.id}
+            profileId={pro?.profile_id}
             displayName={basic.full_name}
             color={basic.color}
-            disabled={saving}
+            disabled={saving || profileLocked}
           />
 
           <SectionDivider />
@@ -411,7 +514,10 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
 
           {/* SECTION 5 — DOCUMENTOS */}
           <SectionLabel icon="file" label="Documentos y certificados" />
-          <DocumentsSection professionalId={pro?.id} disabled={saving} />
+          {/* DocumentsSection: documents are admin-manageable regardless of
+              user_id (the pd_admin_all policy doesn't gate on user_id IS NULL).
+              Don't apply profileLocked here. */}
+          <DocumentsSection profileId={pro?.profile_id} disabled={saving} />
         </div>
 
         <div style={{

@@ -4,7 +4,7 @@ import { DAYS } from './scheduleSection.jsx'
 
 // ───── Card in the list ─────
 export default function ProCard({ pro, workingDays, onClick, onDelete }) {
-  const photo = pro.photo_url || pro.avatar_url
+  const photo = pro.photo_url
   const days  = workingDays
     ? DAYS.filter(d => workingDays.has(d.value)).map(d => d.short)
     : []

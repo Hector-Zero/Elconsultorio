@@ -17,7 +17,7 @@ function safeName(name) {
   return (name ?? 'file').replace(/[^a-z0-9.\-_]/gi, '_').slice(0, 120)
 }
 
-export default function PhotoBioSection({ value, onChange, professionalId, displayName, color, disabled }) {
+export default function PhotoBioSection({ value, onChange, profileId, displayName, color, disabled }) {
   const v = value ?? {}
   const [hovering, setHovering]   = useState(false)
   const [dragOver, setDragOver]   = useState(false)
@@ -41,12 +41,12 @@ export default function PhotoBioSection({ value, onChange, professionalId, displ
       setError('La foto excede 5 MB')
       return
     }
-    if (!professionalId) {
+    if (!profileId) {
       setError('Guarda primero el profesional para subir foto')
       return
     }
     setUploading(true)
-    const path = `${professionalId}/${Date.now()}_${safeName(file.name)}`
+    const path = `${profileId}/${Date.now()}_${safeName(file.name)}`
     const { error: upErr } = await supabase.storage
       .from(PHOTO_BUCKET)
       .upload(path, file, { upsert: false, contentType: file.type })
@@ -102,7 +102,7 @@ export default function PhotoBioSection({ value, onChange, professionalId, displ
   const inits = nameInitials(displayName)
   const ringColor = color || T.primary
   const photoSize = 96
-  const blockingMessage = !professionalId ? 'Guarda primero el profesional para subir foto' : null
+  const blockingMessage = !profileId ? 'Guarda primero el profesional para subir foto' : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

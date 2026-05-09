@@ -4,6 +4,7 @@ import { ClientCtx } from '../../lib/ClientCtx.js'
 import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
+import { syncSchedules } from '../../lib/syncSchedules.js'
 import { DAYS, DEFAULT_AVAILABILITY, Field2, SmallToggle, SettingsHeader, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 export default function EmpresaWizard({ onCancel, onActivated }) {
@@ -55,25 +56,39 @@ export default function EmpresaWizard({ onCancel, onActivated }) {
       }
     }
 
-    const { data: pro, error: proErr } = await supabase
-      .from('professionals')
-      .insert({
-        client_id: clientId,
-        full_name: proName.trim(),
-        initials:  initials(proName),
-        email:     proEmail.trim(),
-        color:     proColor,
-        availability,
-      })
-      .select()
-      .single()
-    if (proErr) { setSaving(false); setErr(proErr.message); return }
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc(
+      'create_professional_at_centro',
+      {
+        p_client_id: clientId,
+        p_full_name: proName.trim(),
+        p_email:     proEmail.trim(),
+        p_color:     proColor,
+      }
+    )
+    if (rpcErr || !rpcResult?.success) {
+      console.warn('[empresaWizard] create_professional_at_centro failed', rpcErr ?? rpcResult)
+      setSaving(false)
+      setErr('No se pudo crear el profesional. Intenta de nuevo.')
+      return
+    }
+    const employmentId = rpcResult.employment_id
 
-    // Migrate any orphaned appointments to this first professional
+    // Seed default schedules on the new employment.
+    const { error: schedErr } = await syncSchedules(
+      supabase,
+      employmentId,
+      availability,
+      []
+    )
+    if (schedErr) {
+      console.warn('[empresaWizard] schedule seed failed', schedErr)
+    }
+
+    // Migrate any orphaned appointments to this first professional.
     await supabase.from('appointments')
-      .update({ professional_id: pro.id })
+      .update({ employment_id: employmentId })
       .eq('client_id', clientId)
-      .is('professional_id', null)
+      .is('employment_id', null)
 
     const { error: cErr, config: nextConfig } = await mergeClientConfig(clientId, fresh => ({
       ...fresh,
@@ -87,7 +102,7 @@ export default function EmpresaWizard({ onCancel, onActivated }) {
     setSaving(false)
     if (cErr) { setErr(cErr.message); return }
     setConfig(nextConfig)
-    onActivated(pro.full_name)
+    onActivated(proName.trim())
   }
 
   const canNext1 = !!nombre.trim()
