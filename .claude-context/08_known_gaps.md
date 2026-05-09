@@ -173,6 +173,19 @@ per gap entry.
 
 ### 41. Provision test professional auth account for end-to-end pro-mode testing (2026-05-05)
 
+🟡 Status update 2026-05-09: Pro 3's `professional_profiles` +
+`professional_employments` rows do not exist post-gap-66 cutover.
+The `auth.users` row for prof3@test.cl is intact. Re-seeding
+required for pro-mode end-to-end testing — either via SPA
+"Agregar profesional" with a manual UPDATE to set `user_id`, or
+via direct Dashboard INSERTs into `professional_profiles` +
+`professional_employments`. Tracked as a follow-up item in the
+gap 66 wrap-up; not blocking.
+
+Original resolution preserved below.
+
+---
+
 ✅ Resolved 2026-05-07. Pro 3 auth account provisioned via
 Supabase Dashboard (raw_user_meta_data with client_id +
 role='professional'); handle_new_user trigger auto-created the
@@ -233,6 +246,14 @@ toggles stay admin-only.
 closed: professionals_public_read_active was dropped, replaced by
 professionals_authenticated_read_active (authenticated, scoped to
 caller's client_id). Anon callers can no longer enumerate professionals.
+
+🟡 ANON-READ POLICIES DEFERRED (2026-05-09). Three public-read storage
+policies (`pd_public_read_displayed`, `professional_photos_public_read`,
+`professional_documents_public_read`) and the `get_public_professionals`
+SECURITY DEFINER function are deferred. The gap 66 schema cutover
+prepared the data model; this remaining work is a focused future
+session that creates the SECURITY DEFINER function and wires up the
+public profile page (`cliente.elconsultorio.cl/<centro_slug>/<pro_slug>`).
 
 The recommended get_public_professionals(p_slug) function for the
 eventual public profile page is deferred — the page does not yet exist
@@ -667,6 +688,18 @@ ficha-screen UI work.
 
 ### 52. appointments_professional_own allows DELETE; should be soft-delete pattern (2026-05-06)
 
+🟡 STILL OPEN, refined by gap 66 (2026-05-09). The policy now uses
+`employment_id` instead of `professional_id`; the FOR ALL scope is
+unchanged and remains too permissive (lets pros hard-delete their
+own appointments, losing audit trail; pros should be limited to
+soft-delete via `status='cancelled'` for historical integrity). A
+focused future session will narrow to per-operation scope or split
+into separate policies for SELECT vs UPDATE vs (no) DELETE.
+
+Original analysis preserved below for context.
+
+---
+
 The `appointments_professional_own` policy is `FOR ALL`, meaning
 treating professionals can SELECT, INSERT, UPDATE, AND DELETE
 their own appointments via the SPA.
@@ -726,6 +759,18 @@ from 2026-05-05 01:24:04 to 2026-05-06 22:41:26 after a no-op
 update.
 
 ### 57. patients_professional_active_assignment is FOR ALL — allows professionals to modify patient identity fields (2026-05-06)
+
+🟡 STILL OPEN, refined by gap 66 (2026-05-09). The policy now uses
+`employment_id` and `pa.status = 'active'` instead of `professional_id`
+and `pa.active = true`; the FOR ALL scope is unchanged from
+pre-cutover and remains too permissive (lets pros UPDATE patient
+identity fields, not just notes/sessions). A focused future session
+will narrow this to FOR SELECT or split into per-operation policies
+matching the gap 66 admin-write distinction.
+
+Original analysis preserved below for context.
+
+---
 
 The patients_professional_active_assignment policy is FOR ALL,
 allowing treating professionals to UPDATE patient identity fields
@@ -876,6 +921,20 @@ Surfaced during item 41 smoke test.
 
 ### 66. Professionals data model refactor (2026-05-07)
 
+🟡 SCHEMA + RPC + SPA COMPLETE (2026-05-09). Make.com blueprint update
+deferred to launch readiness (rename `p_professional_id` →
+`p_employment_id` in HTTP module body of `06_make_blueprint.json`).
+After Make.com update, gap 66 is fully closed.
+
+Commits: `7890b00`, `6dbd4a2`, `1f688af`, `600d54b`, `243a351`,
+`6e27517` + wrap-up doc commit. Migrations: `20260509120000`,
+`20260509130000`, `20260509140000`, `20260509150000`. See
+`09_session_log.md` 2026-05-08/2026-05-09 entry for the full arc.
+
+Original specification preserved below for context.
+
+---
+
 Split public.professionals into two tables along the pro-owned vs
 centro-owned boundary:
 
@@ -906,6 +965,17 @@ Touches schema, ~10 RLS policies, ~6 SPA files, two RPCs, and the auth
 model doc. Not a launch blocker.
 
 ### 67. Distinguish admin-owner from admin-receptionist for clinical notes (2026-05-07)
+
+🟡 HELPER CREATED in gap 66 schema cutover (`7890b00`) —
+`is_admin_with_clinical_authority(p_client_id)` now exists. Full
+wire-up to clinical_notes policies still pending; depends on
+gap 46's centro feature toggle to know when to apply the expanded
+admin authority. Wire-up is a small follow-up commit once gap 46
+lands.
+
+Original specification preserved below for context.
+
+---
 
 Per Hector 2026-05-07: a centro's admin role is not monolithic. Admin-
 owners are licensed psychologists with clinical authority per Ley 20.584.
@@ -1092,6 +1162,13 @@ Part of the items 59-64 pro mode UX cluster (see meta framing
 in MEDIUM section). Surfaced during item 41 smoke test.
 
 ### 65. professionals.user_id has no UNIQUE constraint (2026-05-07)
+
+✅ RESOLVED in commit 7890b00 (gap 66 schema cutover).
+professional_profiles.user_id is UNIQUE per the new schema. The
+prior limitation (could not enforce one-pro-per-user globally) is
+closed. Original analysis preserved below for context.
+
+---
 
 Surfaced during item 42 documentation. The professionals.user_id
 column allows multiple rows to point at the same auth.users.id.

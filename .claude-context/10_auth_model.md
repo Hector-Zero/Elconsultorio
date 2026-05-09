@@ -11,8 +11,8 @@ Every permission decision in this codebase passes through three coupled
 systems: **Supabase Auth** (`auth.users`) holds credentials; **`public.users`**
 maps each auth user to a client (centro) plus a role; **`public.professionals`**
 or **`public.super_admins`** grants role-specific privileges. RLS reads from
-these via four helper functions; the React app reads from `professionals.user_id`
-directly to determine pro vs admin mode. The two paths must agree on which
+these via four helper functions; the React app reads from `professional_profiles.user_id`
+(via the joined query in App.jsx) to determine pro vs admin mode. The two paths must agree on which
 centro the logged-in user belongs to — if the URL slug resolves to client A
 but the user's `users.client_id` is client B, queries silently return empty.
 
@@ -103,27 +103,105 @@ Auth-relevant columns:
 No `updated_at` column on this table, so no `set_updated_at` trigger is
 needed.
 
-### 2.3 `public.professionals` (clinical staff)
+### 2.3 `public.professional_profiles` + `public.professional_employments` (clinical staff)
 
-Clinical staff registry. A professional row can exist independently of
-any auth user — `user_id` is nullable, used for pre-provisioning a
-professional record (full_name, schedule, public profile) before the
-person has a login.
+Post-gap-66 (2026-05-09), the professional identity model splits across
+two tables. The pre-cutover `public.professionals` table is dropped.
 
-Auth-relevant columns:
-- `id` (uuid, PK) — what `my_professional_id()` returns
-- `client_id` (uuid, NOT NULL) — the centro
-- `user_id` (uuid, nullable) — links to `auth.users.id` when the
-  professional has a login
-- `active` (bool, default true) — gates `my_professional_id()` and
-  several public-read policies
+- **`professional_profiles`** (pro-owned identity, one row per person):
+  - `id` (uuid, PK)
+  - `user_id` (uuid, UNIQUE, FK `auth.users(id)` ON DELETE SET NULL,
+    nullable until claim)
+  - `full_name`, `photo_url`, `bio`, `specialties` (text[]),
+    `education`, `years_experience`, `public_summary`,
+    `public_credentials`, `public_documents` (jsonb)
+  - `created_at`, `updated_at`
 
-A single `auth.users.id` could in principle be linked to multiple
-professional rows because there's **no UNIQUE constraint on
-`professionals.user_id`**. `my_professional_id()` defends against this
-with `LIMIT 1` — picking arbitrarily if such a state exists. Worth a
-gap entry if this ever becomes a real concern; in practice we provision
-one auth user per professional.
+- **`professional_employments`** (centro-owned operational state,
+  one row per pro per centro):
+  - `id` (uuid, PK)
+  - `profile_id` (uuid, FK `professional_profiles` ON DELETE CASCADE)
+  - `client_id` (uuid, FK `clients` ON DELETE CASCADE)
+  - `email`, `color`, `active` (default true), `public_profile`
+    (default true)
+  - `created_at`, `updated_at`
+  - UNIQUE `(profile_id, client_id)` — a pro has one employment
+    per centro
+
+The split lets a single person work at multiple centros (one profile,
+multiple employments) and lets centros manage operational state
+without touching identity.
+
+#### Identity claim flow
+
+1. Admin creates a profile + employment via
+   `create_professional_at_centro()` RPC. Profile starts with
+   `user_id = NULL` (unclaimed).
+2. Pro signs up via Supabase Auth, creating an `auth.users` row.
+3. Some claim flow (out of scope for gap 66) sets
+   `professional_profiles.user_id = auth.users.id`.
+4. Once claimed, only the pro can write identity fields (gated by
+   RLS policy `profiles_admin_update_unclaimed` which requires
+   `user_id IS NULL` for admin writes).
+
+Future work: build the claim flow itself. Currently the SPA assumes
+some out-of-band process sets `user_id` (probably a one-time bootstrap
+or magic-link verification — TBD).
+
+#### RLS visibility
+
+- Pro reads their own profile via `profiles_self_all`
+  (`user_id = auth.uid()`).
+- Pro reads their own employment via `employments_self_read`
+  (joins through `my_profile_id()` SECURITY DEFINER helper).
+- Centro admin reads profiles of pros employed at their centro via
+  `profiles_admin_read` (joins through
+  `is_admin_for_active_employment()` helper).
+- Centro admin reads all employments at their centro via
+  `employments_admin_all` (`is_admin_of_client(client_id)`).
+- Authenticated users at a centro read active employments at that
+  centro via `employments_authenticated_read_active` (broad — for
+  the agenda's pro picker).
+- Anon access deferred to a future `get_public_professionals`
+  SECURITY DEFINER function (gap 51 remaining work).
+
+#### Helper functions added by the gap 66 work
+
+- `my_profile_id()` — auth user's profile id, SECURITY DEFINER.
+- `my_employment_id()` — auth user's employment id at their current
+  centro. Joins through profiles via UNIQUE `user_id`, narrowed by
+  `my_client_id()`.
+- `is_admin_for_active_employment(p_profile_id)` — admin over an
+  active employment of this profile.
+- `is_admin_for_any_employment(p_profile_id)` — same, any
+  employment status.
+- `is_admin_with_clinical_authority(p_client_id)` — admin + has
+  a profile (gap 67 helper, full wire-up pending).
+
+The pre-cutover `my_professional_id()` helper is removed; section 3.2
+below reflects the post-cutover state.
+
+#### Storage paths
+
+Files in `professional-photos` and `professional-documents` buckets
+use `<bucket>/<profile_id>/<filename>` folder structure. Photos and
+CVs are pro-owned identity assets that travel with the person across
+centros. Storage RLS policies join through `professional_employments`
+to determine admin scope.
+
+#### Dependent table FK columns
+
+- `appointments.employment_id` — centro-scoped, ON DELETE SET NULL
+- `patient_assignments.employment_id` — centro-scoped, ON DELETE SET NULL
+- `patients.employment_id` — centro-scoped, ON DELETE SET NULL
+- `professional_schedules.employment_id` — centro-scoped, ON DELETE CASCADE
+- `professional_session_types.employment_id` — centro-scoped, ON DELETE CASCADE
+- `professional_documents.profile_id` — pro-owned, ON DELETE CASCADE
+
+See also:
+- Schema: [`02_database_schema.md`](02_database_schema.md)
+- Functions: [`03_database_functions.md`](03_database_functions.md)
+- Migration history: [`09_session_log.md`](09_session_log.md) (2026-05-08/2026-05-09 entry)
 
 ### 2.4 `public.super_admins` (global allowlist)
 
@@ -162,22 +240,63 @@ Consumed by: `clients_admin_update`, `users_admin_read`, `users_admin_write`,
 `notes_admin_with_consent`. Anywhere policies need to scope a row to "my
 centro."
 
-### 3.2 `my_professional_id()`
+### 3.2 Helper functions for professional identity
 
-```sql
-RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path TO 'public'
-```
+Post-gap-66, three SECURITY DEFINER helpers replace the dropped
+`my_professional_id()`. All run with `BYPASSRLS` semantics on their
+internal queries (the function owner has the privilege), enabling
+cross-table policy references without recursion.
 
-Reads `public.professionals` where `user_id = auth.uid() AND active = true`,
-returns the `id` (or NULL) of the first match. The `LIMIT 1` is a
-defensive choice — see section 2.3.
+- **`my_profile_id()`** returns `professional_profiles.id` for the
+  auth user, or NULL if no profile exists. Used by `employments_self_read`
+  to identify the caller's profile without triggering recursive RLS
+  on professional_profiles. Source query:
 
-Consumed by 8 distinct policies across 7 tables: `appointments_professional_own`,
-`assignments_professional_read`, `assignments_professional_update`,
-`notes_treating_professional_all`, `patients_professional_active_assignment`,
-`pd_professional_own`, `ps_professional_own`, `pst_professional_own`,
-`session_types_professional_read`. The pro-mode authorization workhorse.
+  ```sql
+  SELECT id FROM public.professional_profiles
+   WHERE user_id = auth.uid() LIMIT 1
+  ```
+
+- **`my_employment_id()`** returns the active employment id for the
+  auth user at their current centro. Joins through profiles via UNIQUE
+  user_id and narrows by `my_client_id()`. Source query:
+
+  ```sql
+  SELECT e.id FROM public.professional_employments e
+  JOIN public.professional_profiles p ON p.id = e.profile_id
+   WHERE p.user_id = auth.uid()
+     AND e.client_id = my_client_id()
+     AND e.active = true
+   LIMIT 1
+  ```
+
+- **`is_admin_for_active_employment(p_profile_id)`** returns true if
+  the auth user is admin of any centro where this profile has an
+  active employment. Used by `profiles_admin_read`:
+
+  ```sql
+  SELECT EXISTS (
+    SELECT 1 FROM public.professional_employments
+     WHERE profile_id = p_profile_id
+       AND active = true
+       AND is_admin_of_client(client_id))
+  ```
+
+- **`is_admin_for_any_employment(p_profile_id)`** — same shape, no
+  `active` filter. Used by `profiles_admin_delete` and
+  `profiles_admin_update_unclaimed`.
+
+- **`is_admin_with_clinical_authority(p_client_id)`** (gap 67
+  helper, full wire-up pending) — returns true if the auth user
+  is both admin of the centro AND has a profile (i.e., is also a
+  pro themselves, eligible for clinical-authority overrides):
+
+  ```sql
+  SELECT is_admin_of_client(p_client_id)
+     AND EXISTS (
+       SELECT 1 FROM public.professional_profiles
+        WHERE user_id = auth.uid())
+  ```
 
 ### 3.3 `is_admin_of_client(p_client_id uuid)`
 
@@ -328,25 +447,32 @@ The replacement strategy used the SECURITY DEFINER function pattern
 (see section 3.7) for the anon path that previously relied on the
 permissive policies.
 
-### Pattern 2 — Pro-scoped (`my_professional_id()`)
+### Pattern 2 — Pro-scoped reads via employment
 
-For tables that carry a `professional_id` column directly. The treating
-professional has full or limited access to their own rows.
-
-Canonical example: `appointments_professional_own`
+When a policy needs to gate access to a row owned by a specific pro
+at a centro, use `my_employment_id()` directly:
 
 ```sql
-USING (professional_id = my_professional_id())
-WITH CHECK (professional_id = my_professional_id());
+USING (employment_id = my_employment_id())
 ```
 
-Reads as: "I own this row as a professional." Returns NULL for non-pros,
-which the `=` then evaluates to NULL → row invisible.
+Examples:
+- `appointments_professional_own`
+- `assignments_professional_read` / `_update`
+- `patients_professional_active_assignment` (via `patient_assignments`
+  join)
+- `notes_treating_professional_all` (via `patient_assignments` join)
+- `professional_schedules` / `_session_types` admin + own policies
 
-Tables using this pattern: `appointments` (FOR ALL — see gap 52),
-`patient_assignments` (split into SELECT + UPDATE-only-if-active),
-`professional_documents`, `professional_schedules`,
-`professional_session_types`. The own-resource pattern.
+Pre-cutover this used `my_professional_id()` against the dropped
+`public.professionals` table. Post-cutover, `employment_id` is the
+canonical scope and `my_employment_id()` resolves it via the
+profiles + employments join.
+
+When the gate is on the profile (identity) side rather than the
+employment side, use `my_profile_id()`. Currently only
+`employments_self_read` and `professional_documents` policies use
+this — the latter via `profile_id = ...` filtering.
 
 ### Pattern 3 — Super-admin override (`is_super_admin()`)
 
@@ -614,35 +740,39 @@ After provisioning, this single query confirms the full chain is wired
 correctly. Run in the Supabase SQL editor:
 
 ```sql
-SELECT
-  au.email                AS auth_email,
-  au.id                   AS auth_user_id,
-  u.client_id             AS users_client_id,
-  u.role                  AS users_role,
-  u.active                AS users_active,
-  p.id                    AS professional_id,
-  p.full_name             AS professional_name,
-  p.active                AS professional_active
+-- Verify the auth.users row has a corresponding professional profile.
+SELECT au.id, au.email, pp.id AS profile_id, pp.full_name,
+       e.id AS employment_id, e.client_id
 FROM auth.users au
-LEFT JOIN public.users         u ON u.id      = au.id
-LEFT JOIN public.professionals p ON p.user_id = au.id
+LEFT JOIN public.professional_profiles    pp ON pp.user_id    = au.id
+LEFT JOIN public.professional_employments e  ON e.profile_id  = pp.id
 WHERE au.email = 'prof3@test.cl';
 ```
 
-Expected output for a correctly-provisioned **professional**: one row,
-all columns non-null, both `active` flags true, `users_role` is
-non-`'admin'`.
+Note: post-gap-66 this query can return 0+ rows per email — multiple
+if the pro has employments at multiple centros. To narrow to a
+specific centro, add `AND e.client_id = '<client_id>'`.
 
-For a correctly-provisioned **admin**: one row, `users_*` columns
-populated, `professional_*` columns NULL (no professionals link
-needed), `users_role = 'admin'`.
+Expected output for a correctly-provisioned **professional**: one row
+per (profile, employment) pair. The `profile_id` is non-null (auth
+user has claimed a profile); the `employment_id` is non-null
+(employment exists at the centro).
+
+For a correctly-provisioned **admin**: zero rows from this query
+(admins do not get a `professional_profiles` link). To verify admin
+state, query `public.users` directly:
+`SELECT role, client_id FROM public.users WHERE id = au.id`.
 
 If the row is missing entirely → step 1 (auth user creation) didn't
 happen.
-If `users_*` columns are NULL → trigger didn't fire (Scenario A failure
-mode) or manual INSERT was skipped (Scenario B failure mode).
-If `professional_*` columns are NULL but a row was expected → step 5
-(`UPDATE professionals.user_id`) was skipped or hit the wrong row.
+If `profile_id` is NULL but a row was expected → step 5
+(`UPDATE professional_profiles.user_id`) was skipped or hit the
+wrong row — note that `user_id` is now UNIQUE on
+`professional_profiles` per gap 66, so cross-pro misassignment via
+this path is structurally prevented.
+If `employment_id` is NULL → the profile exists but no employment
+row was created at the centro; admin should run "Agregar profesional"
+or use `create_professional_at_centro()` RPC.
 If `users_active` is false → the user is provisioned but soft-disabled;
 `is_admin_of_client()` will return false until reactivated.
 
@@ -694,11 +824,13 @@ available short of `is_super_admin()`.
 
 **UX hint:** Convention is admin mode in App.jsx. But App.jsx doesn't
 read `role` at all; it determines pro vs admin by checking whether a
-`professionals` row links to the auth user. So a user with `role =
-'admin'` and a `professionals.user_id` link would show the pro-mode UX
-while having full admin RLS — a confusing dual state. Provisioning
-discipline: admins do not get a `professionals.user_id` link. See
-section 6.
+`professional_profiles` row links to the auth user (via
+`professional_profiles.user_id = auth.uid()`, joined to a
+`professional_employments` row at the current centro). So a user
+with `role = 'admin'` and a `professional_profiles.user_id` link
+would show the pro-mode UX while having full admin RLS — a confusing
+dual state. Provisioning discipline: admins do not get a
+`professional_profiles.user_id` link. See section 6.
 
 **Does NOT control:** pro-mode detection (independent of role),
 super-admin status (separate `super_admins` table), any non-RLS
@@ -728,31 +860,37 @@ specific centro.
 
 **RLS:** Same as `'owner'` from the policy perspective — `is_admin_of_client()`
 returns FALSE. The professional's actual permissions come from their
-`professionals` row (matched on `user_id`) and the pro-scoped policies
-in pattern 2 / pattern 4 (section 4), not from this role value.
+`professional_profiles` row (matched on `user_id`) plus the linked
+`professional_employments` row at the centro, and the pro-scoped
+policies in pattern 2 / pattern 4 (section 4), not from this role
+value.
 
 **UX hint:** Convention is "this auth user is a treating professional."
-Should be paired with a `professionals.user_id` link pointing at the
-matching staff record. App.jsx's pro-mode detection runs independently
-of this value, so even setting `role = 'professional'` without the
-professionals link would not put the user in pro mode. The role value
-is mostly a label for human readability.
+Should be paired with a `professional_profiles.user_id` link plus an
+active `professional_employments` row pointing at the centro. App.jsx's
+pro-mode detection runs independently of this `role` value, so even
+setting `role = 'professional'` without the profile + employment link
+would not put the user in pro mode. The role value is mostly a label
+for human readability.
 
 **Does NOT control:** pro-mode detection (still based on the
-`professionals.user_id` linkage), any RLS policy directly (no policy
-reads `role = 'professional'`).
+`professional_profiles.user_id` linkage + an active employment at the
+current centro), any RLS policy directly (no policy reads
+`role = 'professional'`).
 
 ### Consistent provisioning matrix
 
-| Intended user kind | `users.role` | `professionals.user_id` link | Result |
+| Intended user kind | `users.role` | `professional_profiles.user_id` + active employment | Result |
 |---|---|---|---|
 | Admin | `'admin'` | none | Admin UX + admin RLS |
-| Treating professional | `'professional'` | set, with `active = true` | Pro UX + pro RLS |
-| Misconfigured (admin with pro link) | `'admin'` | set | Pro UX + admin RLS — avoid |
+| Treating professional | `'professional'` | profile linked + employment with `active = true` | Pro UX + pro RLS |
+| Misconfigured (admin with pro link) | `'admin'` | profile linked | Pro UX + admin RLS — avoid |
 | Misconfigured (pro role no link) | `'professional'` | none | Admin UX + no admin RLS — locked out |
 
-The two axes — `role` and `professionals.user_id` link — are independent
-and must be aligned manually during provisioning.
+The two axes — `role` on `public.users` and `user_id` on
+`professional_profiles` (plus an active `professional_employments`
+row) — are independent and must be aligned manually during
+provisioning.
 
 ## 8. Centro feature toggles (planned)
 
@@ -928,7 +1066,7 @@ Tackle gap 67 in the same session as gap 46's first toggle implementation.
   authority distinction)
 - LOW priority open: 54 (`my_client_id` and `handle_new_user` lack
   `search_path`), 64 (BOT ACTIVO sidebar block visible to pros), 65
-  (professionals.user_id no UNIQUE — folded into gap 66), 68 (SPA
+  (gap 65 RESOLVED in commit 7890b00 — professional_profiles.user_id is UNIQUE per the new schema), 68 (SPA
   effect-dep hygiene)
 - Forward-looking: 46 + 67 jointly (centro feature toggles +
   clinical-authority helper); gap 66 prerequisite for public profile

@@ -101,6 +101,101 @@ The feedback loop is:
 
 If you see "permission denied for table X" or "permission denied for function Y" in PostgREST responses, check `information_schema.role_table_grants` or `information_schema.role_routine_grants` for the role in question. If the GRANT is missing, the migration violated this convention.
 
+## RLS recursion in cross-referencing policies
+
+When two tables have RLS policies that subquery each other (table A's
+policy contains a subquery on table B; table B's policy contains a
+subquery on table A), Postgres aborts with error 42P17 "infinite
+recursion detected in policy." This happens because Postgres evaluates
+all permissive policies on each table as OR'd together, so triggering
+any policy on either table cascades through the cross-referencing
+ones.
+
+Fix: replace the inline subqueries with SECURITY DEFINER helper
+functions. SECURITY DEFINER functions run as the function owner
+(which has BYPASSRLS in Supabase); their internal queries don't
+trigger RLS on the queried tables, breaking the cycle.
+
+Pattern (from the gap 66 work):
+  - `my_profile_id()` returns the auth user's profile id; replaces
+    the inline `SELECT id FROM professional_profiles WHERE user_id = auth.uid()`
+    that lived in `employments_self_read`.
+  - `is_admin_for_active_employment(p_profile_id)` returns boolean;
+    replaces `id IN (SELECT profile_id FROM professional_employments
+    WHERE is_admin_of_client(client_id) AND active = true)` in
+    `profiles_admin_read`.
+  - `is_admin_for_any_employment(p_profile_id)` — same shape, no
+    active filter; for delete and update_unclaimed policies.
+
+The helpers MUST be `SECURITY DEFINER` + `STABLE` + `SET search_path = 'public'`.
+The combination is what enables RLS bypass on the inner queries.
+
+Canonical example:
+[`20260509140000_fix_rls_recursion_on_professional_profiles_employments.sql`](../supabase/migrations/20260509140000_fix_rls_recursion_on_professional_profiles_employments.sql).
+
+When designing new RLS policies that need to reference another table
+with its own policies, default to a SECURITY DEFINER helper from the
+start rather than an inline subquery. Avoids the recursion class of
+bug entirely.
+
+## REVOKE FROM anon for admin-only RPCs
+
+Supabase's project default privileges automatically grant EXECUTE to
+`anon`, `authenticated`, and `service_role` on every new function in the
+public schema. Without explicit REVOKE, an admin-only RPC would be
+callable by anon users (it would still return its forbidden error,
+but exposing the function shape to anon is unnecessary).
+
+For functions that should NOT be reachable by anon, the migration
+must explicitly REVOKE:
+
+```sql
+REVOKE EXECUTE ON FUNCTION public.<function>(<args>) FROM anon;
+```
+
+The `REVOKE FROM PUBLIC` line is also useful as a defense-in-depth
+statement of intent ("this function is not for the public role"),
+even though Supabase's default-privileges don't actually grant via
+PUBLIC.
+
+Order in the migration: `CREATE OR REPLACE FUNCTION` first, then
+`REVOKE FROM PUBLIC`, then `REVOKE FROM anon`, then `GRANT` to the
+specific roles that should have it (typically `authenticated` +
+`service_role`).
+
+Verify with:
+
+```sql
+SELECT
+  p.proname,
+  has_function_privilege('anon',          p.oid, 'EXECUTE') AS anon_can_execute,
+  has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_can_execute
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = '<function>';
+```
+
+Expected: `anon_can_execute = false`, `auth_can_execute = true`.
+
+Examples of admin-only functions following this pattern:
+- `create_professional_at_centro` (gap 66)
+
+Functions that should remain anon-callable (do NOT REVOKE):
+- `get_public_centro_info` (anon bootstrap)
+- `get_bot_context` (Edge Function uses anon key by default)
+- `create_booking_atomic` (Edge Function bearer-gates the caller; not
+  strictly anon-required but historically un-revoked)
+
+Note on `create_booking_atomic` specifically: the create-booking Edge
+Function authenticates the caller via a bearer token check (the
+`sb_secret_` service_role key from Make.com's HTTP module) before
+invoking the RPC. The RPC itself doesn't strictly need anon EXECUTE
+since the Edge Function gates everything. The current state is "left
+un-revoked because the Edge Function gate is sufficient and removing
+anon access offers minimal additional security." A future security
+pass may revoke it; the convention here is purely descriptive of the
+current project state, not prescriptive.
+
 ## Cross-references
 
 - [`08_known_gaps.md`](.claude-context/08_known_gaps.md): gap 55 (default ACLs not migration-captured, resolved 2026-05-08), gap 56 (RPC migrations lacking GRANT EXECUTE, resolved 2026-05-08).
@@ -109,3 +204,5 @@ If you see "permission denied for table X" or "permission denied for function Y"
 - Establishing commits: `fc8ba47` (Phase 2 amends), `c662fa1` (Phase 3 deadline alignment).
 - [Supabase changelog: Tables not exposed to Data and GraphQL API automatically](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically).
 - [PostgreSQL: ALTER DEFAULT PRIVILEGES](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html).
+- Gap 66 RLS hotfix migration: [`20260509140000_fix_rls_recursion_on_professional_profiles_employments.sql`](../supabase/migrations/20260509140000_fix_rls_recursion_on_professional_profiles_employments.sql) (commit `1f688af`).
+- Gap 66 RPC migration: [`20260509150000_create_professional_at_centro.sql`](../supabase/migrations/20260509150000_create_professional_at_centro.sql) (commit `243a351`).

@@ -4,6 +4,199 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
+## 2026-05-08 / 2026-05-09 — gap 66 schema cutover + RPC + RLS hotfix + SPA migration
+
+Six commits + four migrations + one Edge Function deploy. Gap 66
+(professionals data model refactor) is now SPA-complete; only
+Make.com blueprint update remains, deferred to launch readiness.
+
+### Commits shipped
+
+  - `7890b00` feat(rls): split public.professionals into profiles + employments (gap 66)
+  - `6dbd4a2` feat(rpc): rewrite get_bot_context and create_booking_atomic for split (gap 66 phase F)
+  - `1f688af` fix(rls): break professional_profiles/employments recursion (gap 66 hotfix)
+  - `600d54b` feat(spa): migrate agenda read paths to split schema (gap 66 commit 2a)
+  - `243a351` feat(spa): migrate write paths and admin list to split schema (gap 66 commit 2b)
+  - `6e27517` feat(spa): migrate patients screen to split schema (gap 66 commit 2c)
+
+### Migrations applied
+
+  - `20260509120000_split_professionals_to_profiles_and_employments.sql` —
+    schema cutover. Drops `public.professionals`. Creates
+    `professional_profiles` (pro-owned identity, `user_id` UNIQUE) and
+    `professional_employments` (centro-owned operational state). Renames
+    FK columns on 5 dependent tables (`employment_id`); 1 dependent table
+    uses `profile_id` (`professional_documents`, since CVs travel with the
+    person). Recreates 13 public-schema RLS policies and 4 storage
+    policies under the new shape. Defers 3 anon-read policies to gap 51's
+    `get_public_professionals` SECURITY DEFINER (deferred).
+  - `20260509130000_rewrite_rpc_functions_for_split.sql` —
+    Phase F. Rewrites `get_bot_context` (read-only, full join through
+    employments + profiles in 3 places) and `create_booking_atomic`
+    (parameter rename `p_professional_id` → `p_employment_id`, full
+    body rewrite, atomic two-table effect preserved).
+  - `20260509140000_fix_rls_recursion_on_professional_profiles_employments.sql` —
+    RLS hotfix. The two new tables had cross-referencing policies that
+    triggered Postgres 42P17 "infinite recursion." Replaced inline
+    subqueries in 4 policies with three new SECURITY DEFINER helpers
+    (`my_profile_id`, `is_admin_for_active_employment`,
+    `is_admin_for_any_employment`).
+  - `20260509150000_create_professional_at_centro.sql` —
+    Atomic two-table INSERT RPC for new pro creation. Used by 3 SPA
+    create-pro paths. Locked to authenticated + service_role; explicit
+    REVOKE from anon to counter Supabase's default-privilege grant.
+
+### Edge Function deploy
+
+  - `create-booking` Edge Function rewritten + deployed via
+    `supabase functions deploy create-booking --no-verify-jwt`.
+    `resolveProfessional` renamed to `resolveEmployment`, returns
+    employment_id from a `!inner` join through `professional_profiles`.
+    Body parameter `professional_id` → `employment_id`. RPC call
+    parameter `p_employment_id`.
+
+### Outstanding for gap 66
+
+  - Make.com blueprint update (rename `p_professional_id` → `p_employment_id`
+    in the HTTP module body of `06_make_blueprint.json`). Deferred to
+    launch readiness per Hector's call: end-to-end bot integration test
+    happens at launch, not earlier. After this update, gap 66 is fully
+    closed.
+
+### Design decisions locked this session
+
+  1. Clean slate cutover (no historical data preserved on the
+     dropped tables). Test data nukeable.
+  2. FK columns: 5 use `employment_id` (centro-scoped operational),
+     1 uses `profile_id` (pro-owned identity — `professional_documents`
+     because CVs travel with the person across centros).
+  3. Honest renames everywhere. No "save-the-bot" compromises;
+     parameters renamed even though Make.com blueprint becomes
+     temporarily broken. Future-perfect over present-lazy.
+  4. Vestigial columns dropped: `role`, `avatar_url`, `initials`,
+     `availability` (jsonb cache). SPA queries `professional_schedules`
+     directly for one source of truth.
+  5. Coordinated Phase F: RPC rewrites + Edge Function update in same
+     commit, since they share parameter shape.
+  6. Strict isolation in RLS: pros see only their own profile via
+     `profiles_self_all` + `employments_self_read`. Admin/super-admin
+     see profiles of pros employed at their centro via
+     `profiles_admin_read` + `employments_admin_all`. No cross-pro
+     visibility within a centro via direct table queries; future
+     public profile page goes through a SECURITY DEFINER function
+     (deferred to gap 51's remaining work).
+  7. Storage uploads use profile_id-keyed paths
+     (`<bucket>/<profile_id>/<filename>`). Photos and CVs are pro-owned
+     and travel with the person. Documents bucket admin policy is
+     unconditional (admin can manage docs at their centro regardless
+     of `user_id`); photos lock with `profileLocked = pro.user_id !== null`
+     since photo URL writes are RLS-gated by the profile claim.
+  8. Delete-pro-at-centro semantically becomes "Quitar del centro"
+     (delete employment only). Profile, photos, documents preserved.
+     Schedules and session_types CASCADE with the employment;
+     appointments and patient_assignments and patients SET NULL on
+     employment_id (history preserved, employment-mode RLS sees them
+     as orphan).
+  9. Admin write rules: admin can write to a profile until `user_id`
+     is set (RLS policy `profiles_admin_update_unclaimed` enforces this
+     at the data layer; SPA also gates the UI with a `profileLocked`
+     boolean). Admin always controls the employment.
+  10. New-pro creation uses an atomic SECURITY DEFINER RPC rather than
+      two SPA-side INSERTs, eliminating the orphan-profile failure mode.
+
+### Lessons learned (documented in `migration-conventions.md`)
+
+  - **Schema-spanning recon must query `pg_policy` directly across
+    schemas.** Two failed apply attempts on the cutover migration
+    (storage policies in `storage.objects` not visible in original
+    recon). The grep-migrations approach missed them; querying
+    `pg_policy` would have caught them.
+  - **Cross-table RLS policies need SECURITY DEFINER helpers, not
+    inline subqueries.** Postgres evaluates all permissive policies
+    as OR'd, so cross-references trigger 42P17 recursion.
+  - **`REVOKE FROM anon` is required for admin-only RPCs.** Supabase's
+    project default-privileges directly grants anon EXECUTE on every
+    function; `REVOKE FROM PUBLIC` is insufficient.
+  - **"if you need more information to be sure, tell me, do not infer
+    only if sure proceed"** (Hector's mandate). Front-load empirical
+    verification when the cost of being wrong is rolling back. Saved
+    several apply-fail loops once adopted as default discipline.
+  - **The audit-and-verify cycle has compound payoff.** First failed
+    apply taught us about storage policies. Second failed apply
+    surfaced column-name mismatches (`clinical_notes.assignment_id`
+    not `patient_id`; `patient_assignments.status` text not boolean).
+    The third attempt — done after a comprehensive audit query
+    sweeping all affected tables/policies/columns/constraints — applied
+    cleanly first try.
+
+### Browser-specific behaviors observed during testing
+
+  - **Brave Shields blocks programmatic file-input clicks** (the
+    hidden `<input type="file">` + ref + `.click()` pattern). Photo
+    upload failed in Brave but worked in Chrome. Documented for
+    end-user constraint awareness once Vitalis ships; Brave users
+    must disable Shields for the SPA URL.
+
+### Verification queries used (preserved for future sessions)
+
+Reusable diagnostic queries that surfaced bugs this session:
+
+```sql
+-- All RLS policies on a set of tables, with full USING/WITH CHECK bodies
+SELECT c.relname, pol.polname, ...
+FROM pg_policy pol JOIN pg_class c ON c.oid = pol.polrelid
+WHERE c.relname IN (...);
+```
+
+```sql
+-- All FK ON DELETE behavior across affected tables
+SELECT con.conname, pg_get_constraintdef(con.oid)
+FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid
+WHERE c.relname IN (...) AND con.contype = 'f';
+```
+
+```sql
+-- Function privilege check (anon/auth/service_role)
+SELECT p.proname,
+  has_function_privilege('anon', p.oid, 'EXECUTE'),
+  has_function_privilege('authenticated', p.oid, 'EXECUTE'),
+  has_function_privilege('service_role', p.oid, 'EXECUTE')
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = '<name>';
+```
+
+```sql
+-- Cross-schema policy sweep (catches storage-schema policies)
+SELECT n.nspname, c.relname, pol.polname, pg_get_expr(pol.polqual, pol.polrelid)
+FROM pg_policy pol JOIN pg_class c ON c.oid = pol.polrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE pg_get_expr(pol.polqual, pol.polrelid) LIKE '%<keyword>%';
+```
+
+### Pause point for next session
+
+Next steps for gap 66 closure:
+  1. Re-seed test data via the SPA. prof3@test.cl needs a profile +
+     active employment for pro-mode end-to-end testing. (Either via
+     the SPA's "Agregar profesional" + a manual UPDATE setting
+     user_id, or via direct Dashboard INSERTs.)
+  2. End-to-end smoke test: prof3 logs in, sees their own profile,
+     gets pro-mode appointment view, can add a clinical note.
+  3. Make.com blueprint update at launch readiness — rename
+     `p_professional_id` to `p_employment_id` in the HTTP module body.
+  4. Final gap-66 closure entry.
+
+### See also
+
+  - `migration-conventions.md` — RLS recursion pattern + REVOKE FROM
+    anon pattern documented from this session's lessons.
+  - Gap 66 commit list above; canonical migrations are in
+    `supabase/migrations/2026050*.sql`.
+  - Edge Function: `supabase/functions/create-booking/index.ts` —
+    post-cutover state.
+
+---
+
 ## 2026-05-08 — Gaps 55/56 closure: deadline-driven default-ACL alignment
 
 Five-phase session closing the two HIGH-priority RLS gaps remaining

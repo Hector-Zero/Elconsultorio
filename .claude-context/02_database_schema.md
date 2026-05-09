@@ -41,7 +41,7 @@
 - `status` text DEFAULT 'pending_payment'::text
 - `notes` text
 - `created_at` timestamp with time zone NOT NULL DEFAULT now()
-- `professional_id` uuid
+- `employment_id` uuid (post-gap-66; was `professional_id`)
 - `session_type_id` uuid
 - `patient_id` uuid
 - `payment_link` text
@@ -135,7 +135,7 @@
 
 - `id` uuid NOT NULL DEFAULT gen_random_uuid()
 - `patient_id` uuid NOT NULL
-- `professional_id` uuid
+- `employment_id` uuid (post-gap-66; was `professional_id`)
 - `client_id` uuid NOT NULL
 - `status` text NOT NULL DEFAULT 'active'::text
 - `started_at` timestamp with time zone NOT NULL DEFAULT now()
@@ -166,13 +166,13 @@
 - `since` date DEFAULT CURRENT_DATE
 - `created_at` timestamp with time zone NOT NULL DEFAULT now()
 - `updated_at` timestamp with time zone NOT NULL DEFAULT now()
-- `professional_id` uuid
+- `employment_id` uuid (post-gap-66; was `professional_id`)
 - `address` text
 
 ## professional_documents
 
 - `id` uuid NOT NULL DEFAULT gen_random_uuid()
-- `professional_id` uuid NOT NULL
+- `profile_id` uuid NOT NULL (post-gap-66; was `professional_id` — pro-owned, follows the person across centros)
 - `doc_type` text NOT NULL
 - `title` text NOT NULL
 - `file_url` text NOT NULL
@@ -183,47 +183,70 @@
 - `display_order` integer DEFAULT 0
 - `created_at` timestamp with time zone DEFAULT now()
 
+## professional_employments
+
+Centro-owned operational state. One row per (profile, centro) pair.
+A pro working at multiple centros has multiple employment rows.
+Replaces the centro-side fields of the dropped `professionals` table
+post-gap-66.
+
+- `id` uuid NOT NULL DEFAULT gen_random_uuid()
+- `profile_id` uuid NOT NULL — FK to `professional_profiles` ON DELETE CASCADE
+- `client_id` uuid NOT NULL — FK to `clients` ON DELETE CASCADE
+- `email` text
+- `color` text DEFAULT '#2f4a3a'::text — used by SPA for agenda event coloring
+- `active` boolean NOT NULL DEFAULT true
+- `public_profile` boolean NOT NULL DEFAULT true
+- `created_at` timestamp with time zone NOT NULL DEFAULT now()
+- `updated_at` timestamp with time zone NOT NULL DEFAULT now()
+- UNIQUE (`profile_id`, `client_id`) — one employment per (pro, centro)
+
+RLS policies: `employments_admin_all`, `employments_self_read`,
+`employments_authenticated_read_active`, `employments_super_admin_all`.
+
+## professional_profiles
+
+Pro-owned identity. One row per person across the entire platform.
+Replaces the identity-side fields of the dropped `professionals` table
+post-gap-66.
+
+- `id` uuid NOT NULL DEFAULT gen_random_uuid()
+- `user_id` uuid UNIQUE — FK to `auth.users(id)` ON DELETE SET NULL. NULL until the pro claims the profile.
+- `full_name` text NOT NULL
+- `photo_url` text — public URL of profile photo in `professional-photos` bucket
+- `bio` text
+- `specialties` text[]
+- `education` text
+- `years_experience` integer
+- `public_summary` text — for public profile page (gap 51 deferred)
+- `public_credentials` text
+- `public_documents` jsonb — list of doc IDs to display on public profile
+- `created_at` timestamp with time zone NOT NULL DEFAULT now()
+- `updated_at` timestamp with time zone NOT NULL DEFAULT now()
+
+RLS policies: `profiles_self_all`, `profiles_admin_read`,
+`profiles_admin_insert`, `profiles_admin_update_unclaimed`,
+`profiles_admin_delete`, `profiles_super_admin_all`.
+
 ## professional_schedules
 
 - `id` uuid NOT NULL DEFAULT gen_random_uuid()
-- `professional_id` uuid NOT NULL
+- `employment_id` uuid NOT NULL (post-gap-66; was `professional_id`)
 - `day_of_week` integer NOT NULL
 - `start_time` time without time zone NOT NULL
 - `end_time` time without time zone NOT NULL
 - `active` boolean DEFAULT true
 - `created_at` timestamp with time zone DEFAULT now()
+- UNIQUE `schedule_unique_slot` (`employment_id`, `day_of_week`, `start_time`)
 
 ## professional_session_types
 
-- `professional_id` uuid NOT NULL
+- `employment_id` uuid NOT NULL (post-gap-66; was `professional_id`)
 - `session_type_id` uuid NOT NULL
 - `custom_price_amount` numeric
 - `active` boolean DEFAULT true
 - `created_at` timestamp with time zone DEFAULT now()
-
-## professionals
-
-- `id` uuid NOT NULL DEFAULT uuid_generate_v4()
-- `client_id` uuid NOT NULL
-- `full_name` text NOT NULL
-- `initials` text
-- `color` text DEFAULT '#2f4a3a'::text
-- `avatar_url` text
-- `email` text
-- `role` text DEFAULT 'professional'::text
-- `active` boolean DEFAULT true
-- `availability` jsonb DEFAULT '{"friday": {"end": "18:00", "start": "09:00", "available": true}, "monday": {"end": "18:00", "start": "09:00", "available": true}, "sunday": {"end": "13:00", "start": "09:00", "available": false}, "tuesday": {"end": "18:00", "start": "09:00", "available": true}, "saturday": {"end": "13:00", "start": "09:00", "available": false}, "thursday": {"end": "18:00", "start": "09:00", "available": true}, "wednesday": {"end": "18:00", "start": "09:00", "available": true}}'::jsonb
-- `created_at` timestamp with time zone DEFAULT now()
-- `user_id` uuid
-- `public_summary` text
-- `public_credentials` text
-- `public_documents` jsonb
-- `bio` text
-- `specialties` ARRAY DEFAULT '{}'::text[]
-- `education` text
-- `years_experience` integer
-- `public_profile` boolean DEFAULT true
-- `photo_url` text
+- PRIMARY KEY (`employment_id`, `session_type_id`)
 
 ## session_types
 
