@@ -56,7 +56,7 @@ export default function MonthGrid({ monthStart, eventsByDate, proById, multi, on
               }}>{d.getDate()}</div>
               {dayEvts.slice(0, 3).map(ev => {
                 const s = statusStyle(ev.status)
-                const pro = proById?.[ev.professional_id]
+                const pro = proById?.[ev.employment_id]
                 const usePro = !!(multi && pro)
                 const bg = usePro ? hexAlpha(pro.color, 0.18) : s.bg
                 const fg = usePro ? pro.color : s.fg
@@ -65,7 +65,7 @@ export default function MonthGrid({ monthStart, eventsByDate, proById, multi, on
                 const time = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
                 const display = apptDisplayName(ev)
                 const label = usePro
-                  ? `${time} ${pro.initials || initialsFromName(pro.full_name)}`
+                  ? `${time} ${initialsFromName(pro.full_name)}`
                   : `${time} ${display}`
                 const tooltip = usePro
                   ? `${display} · ${time} · ${pro.full_name}`

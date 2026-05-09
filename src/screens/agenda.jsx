@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, Sidebar, TopBar, btn, ConfirmModal } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { useClientBootstrap } from '../lib/useClientBootstrap.js'
+import { flattenEmployment } from '../lib/flattenEmployment.js'
 import { supabase } from '../lib/supabase.js'
 import CitaModal from './agenda/citaModal'
 import {
@@ -21,7 +22,7 @@ import { SoloProBadge, ProSelector } from './agenda/proSelector.jsx'
 // joined shape (LEFT joins by default per PostgREST, so missing
 // patients / session_types / leads do not hide the row).
 const APPT_SELECT = `
-  id, lead_id, patient_id, professional_id, datetime, duration, status, notes,
+  id, lead_id, patient_id, employment_id, datetime, duration, status, notes,
   type, session_type_id, payment_link,
   patients(id, full_name, phone, email, rut),
   session_types(id, name, price_amount, price_currency),
@@ -30,10 +31,11 @@ const APPT_SELECT = `
 
 // Build { [proId]: { [dowKey]: [{ start, end }, ...] } } from raw rows of
 // professional_schedules. Multiple ranges per day (split shifts) are preserved.
+// proId is the employment id post-gap-66; matches `pro.id` in the canonical shape.
 function buildAvailabilityMap(scheduleRows) {
   const out = {}
   for (const r of scheduleRows ?? []) {
-    const proId = r.professional_id
+    const proId = r.employment_id
     const key   = DOW_KEY_BY_NUM[r.day_of_week]
     if (!proId || !key) continue
     out[proId] ??= {}
@@ -111,26 +113,30 @@ export default function AgendaScreen({ onNavigate }) {
       if (isPro) {
         basePros = professional ? [professional] : []
       } else {
-        const { data } = await supabase
-          .from('professionals')
-          .select('*')
+        const { data, error: prosError } = await supabase
+          .from('professional_employments')
+          .select(`
+            id, client_id, color, email, active, public_profile,
+            professional_profiles!inner(id, user_id, full_name, photo_url)
+          `)
           .eq('client_id', clientId)
           .eq('active', true)
-          .order('created_at')
-        basePros = data ?? []
+          .order('created_at', { ascending: true })
+        if (prosError) console.warn('[agenda] pros load failed', prosError)
+        basePros = (data ?? []).map(flattenEmployment)
       }
 
-      // 2. Hydrate availability from professional_schedules. We deliberately
-      //    overwrite the legacy professionals.availability JSON column so the
-      //    calendar reads only from the new schedules table. The legacy column
-      //    is left in the DB as a backup, but never read here.
+      // 2. Build the in-memory availability map from professional_schedules
+      //    (no DB column to shadow post-gap-66). Map keys are `pro.id`, which
+      //    is the employment id — same id used as the FK target across
+      //    appointments and schedules.
       if (basePros.length) {
         const ids = basePros.map(p => p.id).filter(Boolean)
         if (ids.length) {
           const { data: scheds } = await supabase
             .from('professional_schedules')
-            .select('professional_id, day_of_week, start_time, end_time')
-            .in('professional_id', ids)
+            .select('employment_id, day_of_week, start_time, end_time')
+            .in('employment_id', ids)
             .eq('active', true)
           const map = buildAvailabilityMap(scheds ?? [])
           basePros = basePros.map(p => ({ ...p, availability: map[p.id] ?? {} }))
@@ -190,7 +196,7 @@ export default function AgendaScreen({ onNavigate }) {
       .gte('datetime', rangeStart.toISOString())
       .lt('datetime',  rangeEnd.toISOString())
       .order('datetime', { ascending: true })
-    if (isPro) q = q.eq('professional_id', professional.id)
+    if (isPro) q = q.eq('employment_id', professional.id)
     const { data, error: e } = await q
     if (e) { setError(e.message); return }
     setAppts(data ?? [])
@@ -209,7 +215,7 @@ export default function AgendaScreen({ onNavigate }) {
         .gte('datetime', rangeStart.toISOString())
         .lt('datetime',  rangeEnd.toISOString())
         .order('datetime', { ascending: true })
-      if (isPro) q = q.eq('professional_id', professional.id)
+      if (isPro) q = q.eq('employment_id', professional.id)
       return q
     }
 
@@ -249,11 +255,11 @@ export default function AgendaScreen({ onNavigate }) {
     return () => { alive = false; supabase.removeChannel(ch) }
   }, [clientId, isPro, professional?.id, rangeStart.getTime(), rangeEnd.getTime()])
 
-  // Filter by selected professionals (orphans without professional_id always shown when "all")
+  // Filter by selected professionals (orphans without employment_id always shown when "all")
   // and by the toolbar's status / cancelled filters.
   const visibleAppts = (pros.length === 0
     ? appts
-    : appts.filter(a => a.professional_id ? activeProIds.has(a.professional_id) : selectedProIds === null)
+    : appts.filter(a => a.employment_id ? activeProIds.has(a.employment_id) : selectedProIds === null)
   ).filter(a => {
     if (a.status === 'cancelled') return showCancelled
     return statusFilter.has(a.status) || !STATUS_LABELS[a.status] // unknown status falls through

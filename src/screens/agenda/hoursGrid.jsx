@@ -95,7 +95,7 @@ export default function HoursGrid({ days, eventsByCell, proById, multi, singlePr
                 {ev && (
                   <EventBlock
                     ev={ev}
-                    pro={proById?.[ev.professional_id]}
+                    pro={proById?.[ev.employment_id]}
                     multi={multi}
                     onClick={() => onSelectAppt?.(ev)}
                   />

@@ -4,6 +4,7 @@ import { ClientCtx } from './lib/ClientCtx.js'
 import { useClientBootstrap } from './lib/useClientBootstrap.js'
 import { useClientConfig } from './lib/useClientConfig.js'
 import { ClientConfigCtx } from './lib/ClientConfigCtx.js'
+import { flattenEmployment } from './lib/flattenEmployment.js'
 import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
 import Login from './Login.jsx'
@@ -73,13 +74,20 @@ export default function App() {
   useEffect(() => {
     if (!session?.user?.id || !bootstrap.clientId) { setProfessional(null); return }
     setProfessional(undefined)
-    supabase.from('professionals')
-      .select('*')
+    supabase
+      .from('professional_employments')
+      .select(`
+        id, client_id, color, email, active, public_profile,
+        professional_profiles!inner(id, user_id, full_name, photo_url)
+      `)
       .eq('client_id', bootstrap.clientId)
-      .eq('user_id', session.user.id)
       .eq('active', true)
+      .eq('professional_profiles.user_id', session.user.id)
       .maybeSingle()
-      .then(({ data }) => setProfessional(data ?? null))
+      .then(({ data, error }) => {
+        if (error) console.warn('[App] employment lookup failed', error)
+        setProfessional(flattenEmployment(data))
+      })
   }, [session?.user?.id, bootstrap.clientId])
 
   useEffect(() => {
@@ -93,13 +101,20 @@ export default function App() {
   // on the professional's name, email, and other details being set.
   useEffect(() => {
     if (!bootstrap.clientId) { setFirstPro(null); return }
-    supabase.from('professionals')
-      .select('*')
+    supabase
+      .from('professional_employments')
+      .select(`
+        id,
+        professional_profiles!inner(full_name)
+      `)
       .eq('client_id', bootstrap.clientId)
       .eq('active', true)
-      .order('created_at')
+      .order('created_at', { ascending: true })
       .limit(1)
-      .then(({ data }) => setFirstPro(data?.[0] ?? null))
+      .maybeSingle()
+      .then(({ data }) => {
+        setFirstPro(data ? { full_name: data.professional_profiles?.full_name ?? null } : null)
+      })
   }, [bootstrap.clientId, proRefresh])
 
   if (session === undefined || bootstrap.loading || (session && professional === undefined)) {

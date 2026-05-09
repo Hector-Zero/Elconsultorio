@@ -3,17 +3,17 @@ import { T, Icon } from '../shared.jsx'
 import { hexAlpha, initialsFromName } from './_shared.jsx'
 
 export function SoloProBadge({ pro }) {
-  const inits = pro.initials || initialsFromName(pro.full_name)
+  const inits = initialsFromName(pro.full_name)
   return (
     <div style={{ padding: '12px 24px', borderBottom: `1px solid ${T.line}`, background: T.bg, display: 'flex', alignItems: 'center', gap: 10 }}>
       <div style={{
         width: 28, height: 28, borderRadius: '50%', overflow: 'hidden',
-        background: pro.avatar_url ? T.bgSunk : (pro.color || T.primary),
+        background: pro.photo_url ? T.bgSunk : (pro.color || T.primary),
         color: '#fff', display: 'grid', placeItems: 'center',
         fontSize: 11, fontWeight: 600, border: `1px solid ${T.line}`, flexShrink: 0,
       }}>
-        {pro.avatar_url
-          ? <img src={pro.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {pro.photo_url
+          ? <img src={pro.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : inits}
       </div>
       <span style={{ fontSize: 12.5, color: T.inkSoft, fontFamily: T.sans }}>{pro.full_name}</span>
@@ -22,17 +22,17 @@ export function SoloProBadge({ pro }) {
 }
 
 export function ProAvatarSm({ pro, size = 22 }) {
-  const inits = pro.initials || initialsFromName(pro.full_name)
+  const inits = initialsFromName(pro.full_name)
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: pro.avatar_url ? T.bgSunk : pro.color,
+      background: pro.photo_url ? T.bgSunk : pro.color,
       color: '#fff', display: 'grid', placeItems: 'center',
       fontSize: size * 0.42, fontWeight: 600, overflow: 'hidden',
       border: `1px solid ${T.line}`,
     }}>
-      {pro.avatar_url
-        ? <img src={pro.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {pro.photo_url
+        ? <img src={pro.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         : inits}
     </div>
   )

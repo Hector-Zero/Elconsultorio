@@ -9,11 +9,11 @@ export default function MultiDayGrid({ day, pros, appts, onSelectAppt, onCreate,
   const dowKey = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'][(day.getDay() + 6) % 7]
   const apptByPro = {}
   appts.forEach(a => {
-    if (!a.professional_id) return
+    if (!a.employment_id) return
     const dt = new Date(new Date(a.datetime).toLocaleString('en-US', { timeZone: TZ }))
     if (!isSameDay(dt, day)) return
     const hour = String(dt.getHours()).padStart(2, '0')
-    const k = `${a.professional_id}-${hour}`
+    const k = `${a.employment_id}-${hour}`
     ;(apptByPro[k] ??= []).push(a)
   })
   return (

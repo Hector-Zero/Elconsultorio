@@ -117,7 +117,7 @@ export default function CitaModal({
       .from('appointments')
       .select('id', { count: 'exact', head: true })
       .eq('client_id', clientId)
-      .eq('professional_id', proId)
+      .eq('employment_id', proId)
       .eq('datetime', datetimeIso)
       .neq('status', 'cancelled')
     if (isEdit && appt?.id) q = q.neq('id', appt.id)
@@ -222,7 +222,7 @@ export default function CitaModal({
     // appointment insert proceeds and we surface a softer warning in
     // the success toast so the admin can fix it manually if needed.
     // Pattern matches patients.jsx's lead-derived auto-assignment
-    // insert: { patient_id, professional_id, client_id, status:'active',
+    // insert: { patient_id, employment_id, client_id, status:'active',
     // admin_can_view_notes:true }.
     let assignmentFailed = false
     if (!isEdit && usePatientId && proId) {
@@ -233,7 +233,7 @@ export default function CitaModal({
             .from('patient_assignments')
             .insert({
               patient_id:           usePatientId,
-              professional_id:      proId,
+              employment_id:        proId,
               client_id:            clientId,
               status:               'active',
               admin_can_view_notes: true,
@@ -245,17 +245,17 @@ export default function CitaModal({
           const { count, error: chkErr } = await supabase
             .from('patient_assignments')
             .select('id', { count: 'exact', head: true })
-            .eq('client_id',       clientId)
-            .eq('patient_id',      usePatientId)
-            .eq('professional_id', proId)
-            .eq('status',          'active')
+            .eq('client_id',     clientId)
+            .eq('patient_id',    usePatientId)
+            .eq('employment_id', proId)
+            .eq('status',        'active')
           if (chkErr) throw chkErr
           if ((count ?? 0) === 0) {
             const { error: aErr } = await supabase
               .from('patient_assignments')
               .insert({
                 patient_id:           usePatientId,
-                professional_id:      proId,
+                employment_id:        proId,
                 client_id:            clientId,
                 status:               'active',
                 admin_can_view_notes: true,
@@ -274,7 +274,7 @@ export default function CitaModal({
     const appointmentRow = {
       client_id:       clientId,
       patient_id:      usePatientId || null,
-      professional_id: proId || null,
+      employment_id: proId || null,
       datetime:        datetimeIso,
       duration:        Number(duration) || 60,
       session_type_id: sessionTypeId || null,

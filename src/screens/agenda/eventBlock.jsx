@@ -9,7 +9,7 @@ export default function EventBlock({ ev, pro, multi, onClick }) {
   const border = usePro ? pro.color : s.border
   const fg     = usePro ? pro.color : s.fg
   const name   = apptDisplayName(ev)
-  const display = usePro ? (pro.initials || initialsFromName(pro.full_name)) : name
+  const display = usePro ? initialsFromName(pro.full_name) : name
   const service = apptServiceShort(ev)
   const dt = new Date(new Date(ev.datetime).toLocaleString('en-US', { timeZone: TZ }))
   const time = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`

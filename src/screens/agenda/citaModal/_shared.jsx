@@ -126,7 +126,7 @@ export function initialState({ slot, appt }) {
       date:          toDateInputStr(d),
       time:          toTimeInputStr(d),
       duration:      appt.duration ?? 60,
-      proId:         appt.professional_id ?? '',
+      proId:         appt.employment_id ?? '',
       sessionTypeId: appt.session_type_id ?? '',
       type:          appt.type ?? 'presencial',
       status:        appt.status ?? 'pending_payment',
@@ -156,7 +156,7 @@ export function initialState({ slot, appt }) {
 
 // Pull joined fields back so the parent renders the new row instantly.
 export const SAVED_SELECT = `
-  id, lead_id, patient_id, professional_id, datetime, duration, status, notes,
+  id, lead_id, patient_id, employment_id, datetime, duration, status, notes,
   type, session_type_id, payment_link,
   patients(id, full_name, phone, email, rut),
   session_types(id, name, price_amount, price_currency),
