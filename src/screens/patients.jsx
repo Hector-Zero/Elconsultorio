@@ -33,10 +33,10 @@ export default function PatientsScreen({ onNavigate, param }) {
         .eq('client_id', clientId),
       (() => {
         let q = supabase.from('appointments')
-          .select('id, lead_id, professional_id, datetime, duration, status, notes')
+          .select('id, lead_id, employment_id, datetime, duration, status, notes')
           .eq('client_id', clientId)
           .order('datetime', { ascending: true })
-        if (isPro) q = q.eq('professional_id', professional.id)
+        if (isPro) q = q.eq('employment_id', professional.id)
         return q
       })(),
     ]).then(async ([lr, pr, ar]) => {
@@ -66,15 +66,15 @@ export default function PatientsScreen({ onNavigate, param }) {
         .map(l => {
           const firstAppt = apptByLead[l.id][0]
           return {
-            client_id:       clientId,
-            lead_id:         l.id,
-            professional_id: firstAppt?.professional_id ?? null,
-            full_name:       l.name ?? 'Sin nombre',
-            phone:           l.phone ?? '',
-            since:           todayISO(),
-            status:          'active',
-            total_sessions:  0,
-            balance:         0,
+            client_id:      clientId,
+            lead_id:        l.id,
+            employment_id:  firstAppt?.employment_id ?? null,
+            full_name:      l.name ?? 'Sin nombre',
+            phone:          l.phone ?? '',
+            since:          todayISO(),
+            status:         'active',
+            total_sessions: 0,
+            balance:        0,
           }
         })
 
@@ -86,12 +86,12 @@ export default function PatientsScreen({ onNavigate, param }) {
         } else if (created) {
           // For each new patient, create an active assignment
           const assignmentsToCreate = created
-            .filter(p => p.professional_id)
+            .filter(p => p.employment_id)
             .map(p => ({
-              patient_id:      p.id,
-              professional_id: p.professional_id,
-              client_id:       p.client_id,
-              status:          'active',
+              patient_id:           p.id,
+              employment_id:        p.employment_id,
+              client_id:            p.client_id,
+              status:               'active',
               admin_can_view_notes: true,
             }))
           if (assignmentsToCreate.length) {
