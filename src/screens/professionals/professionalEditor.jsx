@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
 import PhotoBioSection      from './photoBioSection.jsx'
 import ScheduleSection      from './scheduleSection.jsx'
-import SessionTypesSection  from './sessionTypesSection.jsx'
 import DocumentsSection     from './documentsSection.jsx'
 
 const textInput = {
@@ -15,7 +14,7 @@ const textInput = {
 }
 
 // ───── Editor modal ─────
-export default function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, onNavigateToSettings, flashToast, mode }) {
+export default function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, flashToast, mode }) {
   // mode === 'self': rendered as a pro's own self-edit view (e.g., from
   // settings/profile.jsx for empresa-mode pros). Skips the modal
   // backdrop, hides close X + Cancelar button, retitles the header.
@@ -41,12 +40,9 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     public_profile:   initialPro?.public_profile ?? true,
   })
 
-  // Schedule + offered are loaded async after we know the pro id.
+  // Schedule rows loaded async after we know the pro id.
   const [schedule, setSchedule]               = useState([])
   const [scheduleOriginal, setScheduleOriginal] = useState([])
-  const [catalog, setCatalog]                 = useState([])
-  const [offered, setOffered]                 = useState({})
-  const [offeredOriginal, setOfferedOriginal] = useState({})
   const [loadingExtra, setLoadingExtra]       = useState(true)
 
   const [saving, setSaving] = useState(false)
@@ -102,23 +98,13 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     return () => { alive = false }
   }, [pro?.id])
 
-  // Load schedule + offered + catalog whenever the editor opens or the pro id flips
+  // Load schedule rows whenever the editor opens or the pro id flips
   // from null → freshly-created.
   useEffect(() => {
     let alive = true
     async function load() {
       setLoadingExtra(true)
-      // Always fetch the catalog of session_types for this client.
-      const cat = await supabase
-        .from('session_types')
-        .select('id, name, price_amount, price_currency, display_order')
-        .eq('client_id', clientId)
-        .eq('active', true)
-        .order('display_order', { ascending: true })
-        .order('created_at',    { ascending: true })
-
       let scheds = []
-      let off    = []
       if (pro?.id) {
         const r1 = await supabase
           .from('professional_schedules')
@@ -126,16 +112,9 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           .eq('employment_id', pro.id)
           .eq('active', true)
         scheds = r1.data ?? []
-        const r2 = await supabase
-          .from('professional_session_types')
-          .select('session_type_id, custom_price_amount, active')
-          .eq('employment_id', pro.id)
-          .eq('active', true)
-        off = r2.data ?? []
       }
       if (!alive) return
 
-      setCatalog(cat.data ?? [])
       const schedRows = scheds.map(s => ({
         _key: `db_${s.id}`,
         id:   s.id,
@@ -145,13 +124,6 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       }))
       setSchedule(schedRows)
       setScheduleOriginal(schedRows.map(r => ({ ...r })))
-
-      const offMap = {}
-      for (const o of off) {
-        offMap[o.session_type_id] = { active: !!o.active, custom_price_amount: o.custom_price_amount }
-      }
-      setOffered(offMap)
-      setOfferedOriginal(JSON.parse(JSON.stringify(offMap)))
 
       setLoadingExtra(false)
     }
@@ -211,51 +183,6 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     if (toInsert.length) {
       const { error } = await supabase.from('professional_schedules').insert(toInsert)
       if (error) throw new Error(`Agenda · insertar: ${error.message}`)
-    }
-  }
-
-  async function syncOffered(employmentId) {
-    const allKeys = new Set([...Object.keys(offered), ...Object.keys(offeredOriginal)])
-    const toDelete = []
-    const toInsert = []
-    const toUpdate = []
-    for (const k of allKeys) {
-      const cur  = offered[k]
-      const orig = offeredOriginal[k]
-      const curActive  = !!cur?.active
-      const origActive = !!orig?.active
-      if (origActive && !curActive)     toDelete.push(k)
-      else if (!origActive && curActive) toInsert.push({
-        employment_id:       employmentId,
-        session_type_id:     k,
-        custom_price_amount: cur.custom_price_amount ?? null,
-        active:              true,
-      })
-      else if (curActive && origActive) {
-        if ((cur.custom_price_amount ?? null) !== (orig.custom_price_amount ?? null)) {
-          toUpdate.push({ k, custom_price_amount: cur.custom_price_amount ?? null })
-        }
-      }
-    }
-    if (toDelete.length) {
-      const { error } = await supabase
-        .from('professional_session_types')
-        .delete()
-        .eq('employment_id', employmentId)
-        .in('session_type_id', toDelete)
-      if (error) throw new Error(`Servicios · eliminar: ${error.message}`)
-    }
-    if (toInsert.length) {
-      const { error } = await supabase.from('professional_session_types').insert(toInsert)
-      if (error) throw new Error(`Servicios · insertar: ${error.message}`)
-    }
-    for (const u of toUpdate) {
-      const { error } = await supabase
-        .from('professional_session_types')
-        .update({ custom_price_amount: u.custom_price_amount })
-        .eq('employment_id', employmentId)
-        .eq('session_type_id', u.k)
-      if (error) throw new Error(`Servicios · actualizar: ${error.message}`)
     }
   }
 
@@ -364,11 +291,9 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       }
 
       await syncEditorSchedules(employmentId)
-      await syncOffered(employmentId)
 
       // Refresh originals so subsequent saves diff cleanly.
       setScheduleOriginal(schedule.map(r => ({ ...r, id: r.id })))
-      setOfferedOriginal(JSON.parse(JSON.stringify(offered)))
 
       const wasNew = !pro
       // Update the local pro shape so the rest of the modal session sees
@@ -519,22 +444,6 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
             <div style={{ padding: 14, color: T.inkMuted, fontSize: 12.5, fontStyle: 'italic' }}>Cargando agenda…</div>
           ) : (
             <ScheduleSection value={schedule} onChange={setSchedule} />
-          )}
-
-          <SectionDivider />
-
-          {/* SECTION 4 — SERVICIOS OFRECIDOS */}
-          <SectionLabel icon="briefcase" label="Servicios que ofrece" />
-          {loadingExtra ? (
-            <div style={{ padding: 14, color: T.inkMuted, fontSize: 12.5, fontStyle: 'italic' }}>Cargando servicios…</div>
-          ) : (
-            <SessionTypesSection
-              catalog={catalog}
-              value={offered}
-              onChange={setOffered}
-              onNavigateToSettings={onNavigateToSettings}
-              disabled={saving}
-            />
           )}
 
           <SectionDivider />

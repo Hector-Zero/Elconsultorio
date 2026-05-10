@@ -227,7 +227,6 @@ export default function ProfessionalsScreen({ onNavigate }) {
           initialPro={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onChanged={() => { fetchPros() }}
-          onNavigateToSettings={() => { setEditing(null); onNavigate?.('settings') }}
           flashToast={flashToast}
         />
       )}
