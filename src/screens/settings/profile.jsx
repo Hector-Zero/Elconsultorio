@@ -9,11 +9,7 @@ import { syncSchedules } from '../../lib/syncSchedules.js'
 import ProfessionalEditor from '../professionals/professionalEditor.jsx'
 import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
 
-// ───── Profile — wired to clients.config (primary_color, resend_from, avatar_url, session_types) ─────
-const DEFAULT_SESSION_TYPES = [
-  { name: 'Sesión individual', duration_minutes: 50, value_clp: 45000 },
-]
-
+// ───── Profile — wired to clients.config (primary_color, resend_from, avatar_url) ─────
 export default function ProfileSettings({ onDirtyChange }) {
   const { clientId, professional, refreshFirstPro } = useContext(ClientCtx)
   const { config, setConfig } = useContext(ClientConfigCtx)
@@ -28,7 +24,6 @@ export default function ProfileSettings({ onDirtyChange }) {
   const [address,      setAddress]      = useState(config?.profile_address ?? '')
   const [resendFrom,   setResendFrom]   = useState(config?.resend_from     ?? '')
   const [avatarUrl,    setAvatarUrl]    = useState(config?.avatar_url      ?? '')
-  const [sessionTypes, setSessionTypes] = useState(config?.session_types?.length ? config.session_types : [])
   const [availability, setAvailability] = useState(null) // null = not loaded
   const [initialAvailability, setInitialAvailability] = useState(null)
   const [saving,       setSaving]       = useState(false)
@@ -50,7 +45,6 @@ export default function ProfileSettings({ onDirtyChange }) {
       setAddress(fresh.profile_address ?? '')
       setResendFrom(fresh.resend_from  ?? '')
       setAvatarUrl(fresh.avatar_url    ?? '')
-      setSessionTypes(fresh.session_types?.length ? fresh.session_types : [])
       setConfig(fresh)
     })
     return () => { alive = false }
@@ -66,7 +60,6 @@ export default function ProfileSettings({ onDirtyChange }) {
     setAddress(config?.profile_address ?? '')
     setResendFrom(config?.resend_from  ?? '')
     setAvatarUrl(config?.avatar_url    ?? '')
-    setSessionTypes(config?.session_types?.length ? config.session_types : [])
   }, [config])
 
   // Dirty detection — compare each field to the persisted config snapshot.
@@ -79,10 +72,9 @@ export default function ProfileSettings({ onDirtyChange }) {
     if (address     !== (config?.profile_address ?? '')) return true
     if (resendFrom  !== (config?.resend_from     ?? '')) return true
     if (avatarUrl   !== (config?.avatar_url      ?? '')) return true
-    if (JSON.stringify(sessionTypes) !== JSON.stringify(config?.session_types ?? [])) return true
     if (initialAvailability && JSON.stringify(availability) !== JSON.stringify(initialAvailability)) return true
     return false
-  }, [name, title, rut, sss, phone, address, resendFrom, avatarUrl, sessionTypes, availability, initialAvailability, config])
+  }, [name, title, rut, sss, phone, address, resendFrom, avatarUrl, availability, initialAvailability, config])
 
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
 
@@ -105,41 +97,13 @@ export default function ProfileSettings({ onDirtyChange }) {
     setConfig(nextConfig)    // immediate context update — sidebar avatar
   }
 
-  function updateRow(i, patch) {
-    setSessionTypes(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r))
-  }
-  function removeRow(i) {
-    setSessionTypes(rows => rows.filter((_, idx) => idx !== i))
-  }
-  function addRow() {
-    setSessionTypes(rows => [...rows, { name: '', duration_minutes: 60, value_clp: 0 }])
-  }
-
   async function handleSave() {
     setSaving(true)
     setSaveStatus(null) // clear any prior error so retries reset
-    const cleanTypes = sessionTypes
-      .filter(s => (s.name ?? '').trim())
-      .map(s => ({
-        name: s.name.trim(),
-        duration_minutes: Number(s.duration_minutes) || 60,
-        value_clp: Number(s.value_clp) || 0,
-      }))
     const trimmedName = name.trim()
-    const nextConfig = {
-      ...(config ?? {}),
-      profile_name:    trimmedName,
-      profile_title:   title.trim(),
-      profile_rut:     rut.trim(),
-      profile_sss:     sss.trim(),
-      profile_phone:   phone.trim(),
-      profile_address: address.trim(),
-      resend_from:     resendFrom,
-      session_types:   cleanTypes,
-    }
     // Merge profile fields against fresh DB state so we never wipe empresa/theme
     // saved from other tabs.
-    console.log('[profile-save] BEFORE mergeClientConfig', { clientId, profileFields: Object.keys(nextConfig).filter(k => k.startsWith('profile_') || ['session_types','resend_from'].includes(k)) })
+    console.log('[profile-save] BEFORE mergeClientConfig', { clientId })
     const { error: clientErr, config: mergedConfig } = await mergeClientConfig(clientId, fresh => ({
       ...fresh,
       profile_name:    trimmedName,
@@ -149,7 +113,6 @@ export default function ProfileSettings({ onDirtyChange }) {
       profile_phone:   phone.trim(),
       profile_address: address.trim(),
       resend_from:     resendFrom,
-      session_types:   cleanTypes,
     }))
     console.log('[profile-save] AFTER mergeClientConfig', { error: clientErr })
     if (clientErr) { setSaving(false); setSaveStatus('error'); return }
@@ -346,50 +309,6 @@ export default function ProfileSettings({ onDirtyChange }) {
       <FieldRow label="Dirección de consulta">
         <input value={address} onChange={e => setAddress(e.target.value)}
           placeholder="Ej: Av. Providencia 1234, Oficina 502" style={textInput} />
-      </FieldRow>
-
-      <FieldRow label="Tipos de sesión" hint="Define los tipos de sesión que ofreces y su valor.">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {sessionTypes.map((s, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 32px', gap: 8, alignItems: 'center' }}>
-              <input
-                value={s.name ?? ''}
-                onChange={e => updateRow(i, { name: e.target.value })}
-                placeholder="Nombre (ej. Sesión individual)"
-                style={textInput}
-              />
-              <div style={{ ...textInput, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <input
-                  type="number"
-                  value={s.duration_minutes ?? ''}
-                  onChange={e => updateRow(i, { duration_minutes: e.target.value })}
-                  style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: T.mono, width: '100%' }}
-                />
-                <span style={{ color: T.inkMuted, fontSize: 11 }}>min</span>
-              </div>
-              <div style={{ ...textInput, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: T.inkMuted }}>$</span>
-                <input
-                  type="number"
-                  value={s.value_clp ?? ''}
-                  onChange={e => updateRow(i, { value_clp: e.target.value })}
-                  placeholder="45000"
-                  style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: T.mono, width: '100%' }}
-                />
-                <span style={{ color: T.inkMuted, fontSize: 11 }}>CLP</span>
-              </div>
-              <button
-                onClick={() => removeRow(i)}
-                title="Eliminar"
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: T.inkMuted, padding: 4 }}
-              ><Icon name="x" size={14} stroke={T.inkMuted} /></button>
-            </div>
-          ))}
-          <button
-            onClick={addRow}
-            style={{ ...btn('ghost'), alignSelf: 'flex-start', marginTop: 4 }}
-          ><Icon name="plus" size={13} /> Agregar tipo de sesión</button>
-        </div>
       </FieldRow>
 
       {!empresaMode && (
