@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { T, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
+import { useClientBootstrap } from '../../lib/useClientBootstrap.js'
 import PhotoBioSection      from './photoBioSection.jsx'
 import ScheduleSection      from './scheduleSection.jsx'
+import SessionTypesSection  from './sessionTypesSection.jsx'
 import DocumentsSection     from './documentsSection.jsx'
 
 const textInput = {
@@ -14,12 +16,19 @@ const textInput = {
 }
 
 // ───── Editor modal ─────
-export default function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, flashToast, mode }) {
+export default function ProfessionalEditor({ clientId, initialPro, onClose, onChanged, onNavigateToSettings, flashToast, mode }) {
   // mode === 'self': rendered as a pro's own self-edit view (e.g., from
   // settings/profile.jsx for empresa-mode pros). Skips the modal
   // backdrop, hides close X + Cancelar button, retitles the header.
   // Default (mode unset): admin-modal behavior with backdrop click-to-close.
   const isSelfMode = mode === 'self'
+
+  // Empresa mode gates the per-employment session-types toggle (SECTION 4).
+  // Single-mode admins are the only pro by definition; the toggle is
+  // redundant for them. Empresa-mode admins + pros use it to opt
+  // employments into/out of catalog services.
+  const { modoEmpresa } = useClientBootstrap()
+  const empresaMode = !!modoEmpresa
   // Track the "current" pro so a freshly-created professional flips the modal
   // into edit mode (unlocking photo + document uploads).
   const [pro, setPro] = useState(initialPro)
@@ -40,9 +49,12 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     public_profile:   initialPro?.public_profile ?? true,
   })
 
-  // Schedule rows loaded async after we know the pro id.
+  // Schedule rows + offered services loaded async after we know the pro id.
   const [schedule, setSchedule]               = useState([])
   const [scheduleOriginal, setScheduleOriginal] = useState([])
+  const [catalog, setCatalog]                 = useState([])
+  const [offered, setOffered]                 = useState({})
+  const [offeredOriginal, setOfferedOriginal] = useState({})
   const [loadingExtra, setLoadingExtra]       = useState(true)
 
   const [saving, setSaving] = useState(false)
@@ -98,13 +110,24 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     return () => { alive = false }
   }, [pro?.id])
 
-  // Load schedule rows whenever the editor opens or the pro id flips
-  // from null → freshly-created.
+  // Load schedule rows + offered services + centro catalog whenever
+  // the editor opens or the pro id flips from null → freshly-created.
   useEffect(() => {
     let alive = true
     async function load() {
       setLoadingExtra(true)
+      // Catalog of session_types for this client (always fetched — drives
+      // SECTION 4's toggle list when empresa mode is active).
+      const cat = await supabase
+        .from('session_types')
+        .select('id, name, price_amount, price_currency, display_order')
+        .eq('client_id', clientId)
+        .eq('active', true)
+        .order('display_order', { ascending: true })
+        .order('created_at',    { ascending: true })
+
       let scheds = []
+      let off    = []
       if (pro?.id) {
         const r1 = await supabase
           .from('professional_schedules')
@@ -112,9 +135,17 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           .eq('employment_id', pro.id)
           .eq('active', true)
         scheds = r1.data ?? []
+        // Toggle-only fetch — only need session_type_id for active rows.
+        const r2 = await supabase
+          .from('professional_session_types')
+          .select('session_type_id')
+          .eq('employment_id', pro.id)
+          .eq('active', true)
+        off = r2.data ?? []
       }
       if (!alive) return
 
+      setCatalog(cat.data ?? [])
       const schedRows = scheds.map(s => ({
         _key: `db_${s.id}`,
         id:   s.id,
@@ -124,6 +155,11 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       }))
       setSchedule(schedRows)
       setScheduleOriginal(schedRows.map(r => ({ ...r })))
+
+      const offMap = {}
+      for (const o of off) offMap[o.session_type_id] = true
+      setOffered(offMap)
+      setOfferedOriginal({ ...offMap })
 
       setLoadingExtra(false)
     }
@@ -183,6 +219,38 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
     if (toInsert.length) {
       const { error } = await supabase.from('professional_schedules').insert(toInsert)
       if (error) throw new Error(`Agenda · insertar: ${error.message}`)
+    }
+  }
+
+  // Toggle-only diff against professional_session_types. The on/off
+  // toggle is binary — there's no UPDATE path because there's nothing
+  // to mutate on an existing row (custom_price_amount was dropped from
+  // the per-pro UI; centro catalog price applies uniformly).
+  async function syncOffered(employmentId) {
+    const allKeys = new Set([...Object.keys(offered), ...Object.keys(offeredOriginal)])
+    const toDelete = []
+    const toInsert = []
+    for (const k of allKeys) {
+      const cur  = !!offered[k]
+      const orig = !!offeredOriginal[k]
+      if (orig && !cur)      toDelete.push(k)
+      else if (!orig && cur) toInsert.push({
+        employment_id:   employmentId,
+        session_type_id: k,
+        active:          true,
+      })
+    }
+    if (toDelete.length) {
+      const { error } = await supabase
+        .from('professional_session_types')
+        .delete()
+        .eq('employment_id', employmentId)
+        .in('session_type_id', toDelete)
+      if (error) throw new Error(`Servicios · eliminar: ${error.message}`)
+    }
+    if (toInsert.length) {
+      const { error } = await supabase.from('professional_session_types').insert(toInsert)
+      if (error) throw new Error(`Servicios · insertar: ${error.message}`)
     }
   }
 
@@ -291,9 +359,11 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       }
 
       await syncEditorSchedules(employmentId)
+      await syncOffered(employmentId)
 
       // Refresh originals so subsequent saves diff cleanly.
       setScheduleOriginal(schedule.map(r => ({ ...r, id: r.id })))
+      setOfferedOriginal({ ...offered })
 
       const wasNew = !pro
       // Update the local pro shape so the rest of the modal session sees
@@ -447,6 +517,26 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           )}
 
           <SectionDivider />
+
+          {empresaMode && (
+            <>
+              {/* SECTION 4 — SERVICIOS OFRECIDOS (Empresa mode only) */}
+              <SectionLabel icon="briefcase" label="Servicios que ofrece" />
+              {loadingExtra ? (
+                <div style={{ padding: 14, color: T.inkMuted, fontSize: 12.5, fontStyle: 'italic' }}>Cargando servicios…</div>
+              ) : (
+                <SessionTypesSection
+                  catalog={catalog}
+                  value={offered}
+                  onChange={setOffered}
+                  onNavigateToSettings={onNavigateToSettings}
+                  disabled={saving}
+                />
+              )}
+
+              <SectionDivider />
+            </>
+          )}
 
           {/* SECTION 5 — DOCUMENTOS */}
           <SectionLabel icon="file" label="Documentos y certificados" />
