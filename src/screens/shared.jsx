@@ -201,14 +201,16 @@ const ALL_ITEMS = [
 
 export const Sidebar = ({ active = 'leads', onNavigate }) => {
   const ctx = useContext(ClientCtx)
-  const { modules, brandName, avatarUrl } = useClientBootstrap()
+  const { modules, brandName, avatarUrl, modoEmpresa } = useClientBootstrap()
   const safeBrandName = brandName ?? 'consultorio'
   const letter    = safeBrandName[0]?.toLowerCase() ?? 'c'
   const userEmail = ctx?.session?.user?.email ?? ''
 
-  const isPro     = !!ctx?.professional
-  const proAllowed = ['calendar', 'patients', 'settings']
+  const isPro       = !!ctx?.professional
+  const empresaMode = !!modoEmpresa
+  const proAllowed  = ['calendar', 'patients', 'settings']
   let items = modules ? ALL_ITEMS.filter(it => modules.includes(it.id)) : ALL_ITEMS
+  if (!empresaMode) items = items.filter(it => it.id !== 'professionals')
   if (isPro) items = items.filter(it => proAllowed.includes(it.id))
 
   return (
