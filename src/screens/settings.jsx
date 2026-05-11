@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, Sidebar, TopBar } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { DirtyGuardCtx } from '../lib/DirtyGuardContext.jsx'
@@ -53,23 +53,10 @@ export default function SettingsScreen({ onNavigate }) {
 
   const defaultSection = isPro ? 'profile' : (empresaMode ? 'empresa' : 'profile')
   const [section, setSection] = useState(defaultSection)
-  const [profileDirty, setProfileDirty] = useState(false)
 
-  // Bridge the existing profileDirty signal into the central guard until
-  // commit 2 refactors profile.jsx to call useDirtyForm directly. The
-  // dirty getter must read live state, so we mirror profileDirty and
-  // section through refs and register a stable closure once.
+  // Sub-tab switching consults the central guard. Each editor self-
+  // registers via useDirtyForm; this screen no longer needs a bridge.
   const guard = useContext(DirtyGuardCtx)
-  const dirtyStateRef = useRef({ dirty: false, section })
-  dirtyStateRef.current = { dirty: profileDirty, section }
-  useEffect(() => {
-    if (!guard) return
-    guard.register('settings/profile', () => {
-      const { dirty, section: s } = dirtyStateRef.current
-      return dirty && s === 'profile'
-    })
-    return () => guard.unregister('settings/profile')
-  }, [guard])
 
   useEffect(() => {
     if (!sections.find(s => s.id === section)) setSection(sections[0]?.id ?? 'profile')
@@ -116,7 +103,7 @@ export default function SettingsScreen({ onNavigate }) {
 
           <div style={{ overflow: 'auto' }}>
             {section === 'bot'           && <BotConfig />}
-            {section === 'profile'       && <ProfileSettings onDirtyChange={setProfileDirty} />}
+            {section === 'profile'       && <ProfileSettings />}
             {section === 'empresa'       && <EmpresaSettings onActivated={() => setSection('empresa')} onNavigate={onNavigate} />}
             {section === 'templates'     && <TemplateSettings />}
             {section === 'appearance'    && <AppearanceSettings />}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react'
 import { T, Icon, btn, SectionLabel } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
 import { supabase } from '../../lib/supabase.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
 
 const textInput = {
   padding: '10px 12px', borderRadius: 8,
@@ -32,6 +33,8 @@ export default function ServiciosSesionesSettings() {
   const [saving, setSaving]             = useState(false)
   const [toast, setToast]               = useState(null)
 
+  const dirtyForm = useDirtyForm('settings.serviciosSesiones', () => rows)
+
   async function fetchRows() {
     const { data, error } = await supabase
       .from('session_types')
@@ -52,6 +55,10 @@ export default function ServiciosSesionesSettings() {
     }))
     setRows(fresh)
     setOriginalRows(fresh.map(r => ({ ...r })))
+    // Covers both mount-load and post-save reload — snapshot tracks
+    // the last persisted row set so subsequent local edits surface
+    // as dirty.
+    dirtyForm.resetSnapshot(fresh)
     setLoading(false)
   }
 

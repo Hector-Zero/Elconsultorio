@@ -6,11 +6,12 @@ import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
 import { syncSchedules } from '../../lib/syncSchedules.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import ProfessionalEditor from '../professionals/professionalEditor.jsx'
 import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 // ───── Profile — wired to clients.config (primary_color, resend_from, avatar_url) ─────
-export default function ProfileSettings({ onDirtyChange }) {
+export default function ProfileSettings() {
   const { clientId, professional, refreshFirstPro } = useContext(ClientCtx)
   const { config, setConfig } = useContext(ClientConfigCtx)
   const empresaMode = !!config?.modo_empresa
@@ -62,21 +63,34 @@ export default function ProfileSettings({ onDirtyChange }) {
     setAvatarUrl(config?.avatar_url    ?? '')
   }, [config])
 
-  // Dirty detection — compare each field to the persisted config snapshot.
-  const dirty = React.useMemo(() => {
-    if (name        !== (config?.profile_name    ?? '')) return true
-    if (title       !== (config?.profile_title   ?? '')) return true
-    if (rut         !== (config?.profile_rut     ?? '')) return true
-    if (sss         !== (config?.profile_sss     ?? '')) return true
-    if (phone       !== (config?.profile_phone   ?? '')) return true
-    if (address     !== (config?.profile_address ?? '')) return true
-    if (resendFrom  !== (config?.resend_from     ?? '')) return true
-    if (avatarUrl   !== (config?.avatar_url      ?? '')) return true
-    if (initialAvailability && JSON.stringify(availability) !== JSON.stringify(initialAvailability)) return true
-    return false
-  }, [name, title, rut, sss, phone, address, resendFrom, avatarUrl, availability, initialAvailability, config])
+  // Dirty detection via the central guard. The accessor returns the
+  // current edit state; the snapshot tracks what's saved (rebuilt
+  // from config whenever it changes, plus initialAvailability for the
+  // schedule). Other-tab updates flow in through the config-resync
+  // useEffect above plus the resetSnapshot effect below.
+  const dirtyForm = useDirtyForm(
+    'settings.profile',
+    () => ({
+      name, title, rut, sss, phone, address, resendFrom, avatarUrl,
+      availability,
+    }),
+  )
 
-  useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
+  useEffect(() => {
+    dirtyForm.resetSnapshot({
+      name:         config?.profile_name    ?? '',
+      title:        config?.profile_title   ?? '',
+      rut:          config?.profile_rut     ?? '',
+      sss:          config?.profile_sss     ?? '',
+      phone:        config?.profile_phone   ?? '',
+      address:      config?.profile_address ?? '',
+      resendFrom:   config?.resend_from     ?? '',
+      avatarUrl:    config?.avatar_url      ?? '',
+      availability: initialAvailability,
+    })
+    // dirtyForm reference is stable across renders; intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, initialAvailability])
 
   async function handleAvatarPick(e) {
     const file = e.target.files?.[0]

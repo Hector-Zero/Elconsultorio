@@ -4,6 +4,7 @@ import { ClientCtx } from '../../lib/ClientCtx.js'
 import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import { SettingsHeader, FieldRow, textInput, formatRut } from './_shared.jsx'
 import EmpresaWizard from './empresaWizard.jsx'
 
@@ -97,6 +98,14 @@ function EmpresaActiveForm({ banner, onNavigate }) {
   const [toast, setToast]         = useState(null)
   const fileRef = React.useRef(null)
 
+  const dirtyForm = useDirtyForm(
+    'settings.empresa',
+    () => ({
+      nombre, rut, direccion, telefono, email, logoUrl,
+      hasPendingFile: !!pendingFile,
+    }),
+  )
+
   // Fetch fresh on mount so we don't render with a stale empresa snapshot.
   useEffect(() => {
     if (!clientId) return
@@ -107,8 +116,19 @@ function EmpresaActiveForm({ banner, onNavigate }) {
       setNombre(e.nombre ?? ''); setRut(e.rut ?? ''); setDireccion(e.direccion ?? '')
       setTelefono(e.telefono ?? ''); setEmail(e.email ?? ''); setLogoUrl(e.logo_url ?? '')
       if (fresh) setConfig(fresh)
+      dirtyForm.resetSnapshot({
+        nombre:    e.nombre    ?? '',
+        rut:       e.rut       ?? '',
+        direccion: e.direccion ?? '',
+        telefono:  e.telefono  ?? '',
+        email:     e.email     ?? '',
+        logoUrl:   e.logo_url  ?? '',
+        hasPendingFile: false,
+      })
     })
     return () => { alive = false }
+    // dirtyForm reference is stable; intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
   function pickLogo(e) {
@@ -144,6 +164,15 @@ function EmpresaActiveForm({ banner, onNavigate }) {
     if (error) { setToast({ kind: 'err', msg: 'Error al guardar' }); return }
     setConfig(next)
     setLogoUrl(nextLogoUrl); setPendingFile(null)
+    dirtyForm.resetSnapshot({
+      nombre:    nombre.trim(),
+      rut:       rut.trim(),
+      direccion: direccion.trim(),
+      telefono:  telefono.trim(),
+      email:     email.trim(),
+      logoUrl:   nextLogoUrl,
+      hasPendingFile: false,
+    })
     setToast({ kind: 'ok', msg: '✓ Guardado' })
     setTimeout(() => setToast(null), 2200)
   }

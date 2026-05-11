@@ -2,9 +2,11 @@ import React, { useState, useContext } from 'react'
 import { T, Icon, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
 import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
+import { DirtyGuardCtx } from '../../lib/DirtyGuardContext.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
 import { syncSchedules } from '../../lib/syncSchedules.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import { DAYS, DEFAULT_AVAILABILITY, Field2, SmallToggle, SettingsHeader, textInput, formatRut, TimePicker } from './_shared.jsx'
 
 export default function EmpresaWizard({ onCancel, onActivated }) {
@@ -30,6 +32,22 @@ export default function EmpresaWizard({ onCancel, onActivated }) {
 
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState(null)
+
+  // Dirty tracks the wizard form across both steps. The internal `step`
+  // is deliberately omitted — back/next within the wizard doesn't lose
+  // data, so it shouldn't trigger the guard. Sidebar / sub-tab nav
+  // (parent unmounting the wizard) does fire the prompt; Cancelar
+  // routes through guard.confirm explicitly below.
+  const guard = useContext(DirtyGuardCtx)
+  useDirtyForm(
+    'settings.empresaWizard',
+    () => ({
+      nombre, rut, direccion, telefono, emailC,
+      logoPreview,
+      proName, proEmail, proColor,
+      availability,
+    }),
+  )
 
   function pickLogo(e) {
     const f = e.target.files?.[0]
@@ -161,7 +179,7 @@ export default function EmpresaWizard({ onCancel, onActivated }) {
           </div>
 
           <div style={{ marginTop: 28, display: 'flex', justifyContent: 'space-between' }}>
-            <button style={btn('ghost')} onClick={onCancel}>Cancelar</button>
+            <button style={btn('ghost')} onClick={() => guard?.confirm(() => onCancel())}>Cancelar</button>
             <button
               style={{ ...btn('primary'), opacity: canNext1 ? 1 : 0.5, cursor: canNext1 ? 'pointer' : 'not-allowed' }}
               disabled={!canNext1}

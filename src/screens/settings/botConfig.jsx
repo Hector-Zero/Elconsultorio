@@ -4,6 +4,7 @@ import { ClientCtx } from '../../lib/ClientCtx.js'
 import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import { SettingsHeader, FieldRow, Toggle, textInput } from './_shared.jsx'
 
 // ───── Bot config — wired to agents_config + clients.config ─────
@@ -27,12 +28,25 @@ export default function BotConfig() {
 
   const SELECT_COLS = 'agent_name, system_prompt, closing_question, message_limit, active'
 
+  const dirtyForm = useDirtyForm(
+    'settings.botConfig',
+    () => ({ systemPrompt, messageLimit, closingQuestion, agentName, active }),
+  )
+
   function applyData(data) {
-    setSystemPrompt(data.system_prompt ?? '')
-    setMessageLimit(data.message_limit ?? config?.message_limit ?? 20)
-    setClosingQuestion(data.closing_question ?? '')
-    setAgentName(data.agent_name ?? '')
-    setActive(data.active ?? true)
+    const next = {
+      systemPrompt:    data.system_prompt    ?? '',
+      messageLimit:    data.message_limit    ?? config?.message_limit ?? 20,
+      closingQuestion: data.closing_question ?? '',
+      agentName:       data.agent_name       ?? '',
+      active:          data.active           ?? true,
+    }
+    setSystemPrompt(next.systemPrompt)
+    setMessageLimit(next.messageLimit)
+    setClosingQuestion(next.closingQuestion)
+    setAgentName(next.agentName)
+    setActive(next.active)
+    dirtyForm.resetSnapshot(next)
   }
 
   useEffect(() => {
@@ -68,6 +82,7 @@ export default function BotConfig() {
     ])
     setSaving(false)
     if (agErr || clErr) { setSaveStatus('error'); return }
+    dirtyForm.registerSaved()
     setSaveStatus('ok')
     setTimeout(() => setSaveStatus(null), 2500)
   }
