@@ -4,6 +4,7 @@ import { ClientCtx } from '../../lib/ClientCtx.js'
 import { ClientConfigCtx } from '../../lib/ClientConfigCtx.js'
 import { fetchClientConfig, mergeClientConfig } from '../../lib/clientConfig.js'
 import { THEMES, DEFAULT_THEME_ID, getTheme } from '../../config/themes.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import { SettingsHeader } from './_shared.jsx'
 
 // ───── Appearance — themes ─────
@@ -15,6 +16,16 @@ export default function AppearanceSettings() {
   const [themeId, setThemeId] = useState(config?.theme_id ?? null)
   const [saving, setSaving]   = useState(false)
   const [toast, setToast]     = useState(null)
+
+  // Local-preview semantics: themeId reflects the highlighted card,
+  // but the global :root CSS vars only update when the user saves.
+  // The guard fires if the user navigates away after picking a card
+  // without committing.
+  const dirtyForm = useDirtyForm(
+    'settings.appearance',
+    () => ({ themeId }),
+    { initialSnapshot: { themeId: null } },
+  )
 
   // On-mount fetch:
   //   - If a theme is saved → highlight + apply it.
@@ -30,17 +41,22 @@ export default function AppearanceSettings() {
       if (fresh?.theme_id) {
         setThemeId(fresh.theme_id)
         applyTheme(getTheme(fresh.theme_id))
+        dirtyForm.resetSnapshot({ themeId: fresh.theme_id })
       } else {
         setThemeId(null)
         applyTheme(getTheme(DEFAULT_THEME_ID))
+        dirtyForm.resetSnapshot({ themeId: null })
       }
     })
     return () => { alive = false }
+    // dirtyForm reference is stable; intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId])
 
+  // Local preview only: highlight the card without touching the
+  // global theme. applyTheme runs on save.
   function pickTheme(id) {
     setThemeId(id)
-    applyTheme(getTheme(id))
   }
 
   async function save() {
@@ -53,6 +69,10 @@ export default function AppearanceSettings() {
     console.log('[Apariencia save] VERIFY re-fetch from Supabase', { error: vErr, theme_id: verify?.theme_id, persisted: verify?.theme_id === themeId })
     setSaving(false)
     setConfig(next)
+    // Now that the user has committed, propagate the choice to the
+    // global :root CSS vars.
+    applyTheme(getTheme(themeId))
+    dirtyForm.registerSaved()
     setToast({ kind: 'ok', msg: '✓ Apariencia guardada' })
     setTimeout(() => setToast(null), 2500)
   }
