@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useContext } from 'react'
 import { T, Icon, btn, ConfirmModal } from '../../shared.jsx'
 import { supabase } from '../../../lib/supabase.js'
+import { useDirtyForm } from '../../../lib/useDirtyForm.js'
+import { DirtyGuardCtx } from '../../../lib/DirtyGuardContext.jsx'
 import {
   APPT_STATUS, APPT_TYPES, DURATIONS, DAY_LABELS_LONG, DOW_KEYS,
   FALLBACK_TIMES, timesFromRanges,
@@ -46,6 +48,20 @@ export default function CitaModal({
   const [confirmDel,       setConfirmDel]       = useState(false)
   const [err,              setErr]              = useState(null)
   const [pendingProceed,   setPendingProceed]   = useState(null) // function | null — for confirm-and-proceed warnings
+
+  // Dirty guard. The modal is unmounted between edits (agenda.jsx
+  // sets modal to null on close, then to a fresh slot/appt object on
+  // next click), so the hook's first-render snapshot captures `init`
+  // and stays valid for the lifetime of this mount. No resetSnapshot
+  // needed.
+  const guard = useContext(DirtyGuardCtx)
+  const dirtyForm = useDirtyForm(
+    'editor.cita',
+    () => ({
+      date, time, duration, proId, sessionTypeId, type, status,
+      notes, paymentLink, patientMode, patientId, newPt,
+    }),
+  )
 
   const isEdit       = init.isEdit
   const selectedPro  = pros.find(p => p.id === proId)
@@ -313,6 +329,7 @@ export default function CitaModal({
     }
 
     setSaving(false)
+    dirtyForm.registerSaved()
     onSaved?.(saved, { createdPatient, assignmentFailed })
   }
 
@@ -327,8 +344,13 @@ export default function CitaModal({
     onDeleted?.(appt.id)
   }
 
-  // Sanitize close (don't close mid-save)
-  const safeClose = () => { if (!saving && !deleting) onClose?.() }
+  // Sanitize close (don't close mid-save), and route through the
+  // central dirty guard so unsaved edits prompt the confirm modal
+  // before discard.
+  const safeClose = () => {
+    if (saving || deleting) return
+    guard?.confirm(() => onClose?.())
+  }
 
   return (
     <>

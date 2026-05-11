@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
 import { T, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
 import { useClientBootstrap } from '../../lib/useClientBootstrap.js'
+import { useDirtyForm } from '../../lib/useDirtyForm.js'
+import { DirtyGuardCtx } from '../../lib/DirtyGuardContext.jsx'
 import PhotoBioSection      from './photoBioSection.jsx'
 import ScheduleSection      from './scheduleSection.jsx'
 import SessionTypesSection  from './sessionTypesSection.jsx'
@@ -60,6 +62,16 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
+  // Dirty guard. scheduleOriginal/offeredOriginal already exist for the
+  // DB-diff sync (different purpose); this hook independently tracks
+  // unsaved edits for navigation prompts. Both load effects below call
+  // resetSnapshot once their fetched values settle into state.
+  const guard = useContext(DirtyGuardCtx)
+  const dirtyForm = useDirtyForm(
+    'editor.professional',
+    () => ({ basic, profile, schedule, offered }),
+  )
+
   // Lock identity fields when the profile is claimed by SOMEONE ELSE.
   // The claimant editing their own profile (mode === 'self') should
   // never be locked — RLS profiles_self_all permits self-writes
@@ -90,24 +102,37 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         const flat = flattenEmployment(data)
         if (!flat) return
         setPro(flat)
-        setBasic(b => ({
-          ...b,
-          full_name: flat.full_name ?? b.full_name,
-          email:     flat.email     ?? b.email,
-          color:     flat.color     ?? b.color,
-          active:    flat.active != null ? !!flat.active : b.active,
-        }))
-        setProfile(p => ({
-          ...p,
+        const nextBasic = {
+          full_name: flat.full_name ?? '',
+          email:     flat.email     ?? '',
+          color:     flat.color     ?? PRO_COLORS[0],
+          active:    flat.active != null ? !!flat.active : true,
+        }
+        const nextProfile = {
           photo_url:        flat.photo_url ?? '',
           bio:              flat.bio ?? '',
           specialties:      Array.isArray(flat.specialties) ? flat.specialties : [],
           education:        flat.education ?? '',
           years_experience: flat.years_experience ?? null,
           public_profile:   flat.public_profile ?? true,
-        }))
+        }
+        setBasic(nextBasic)
+        setProfile(nextProfile)
+        // Re-anchor the snapshot to the freshly-loaded identity fields.
+        // Schedule + offered come from the sibling effect; if it ran
+        // first, the schedule/offered branches of the snapshot will
+        // already be at their loaded values; if it hasn't run yet, the
+        // sibling effect will resetSnapshot again when it settles.
+        dirtyForm.resetSnapshot({
+          basic:    nextBasic,
+          profile:  nextProfile,
+          schedule,
+          offered,
+        })
       })
     return () => { alive = false }
+    // dirtyForm reference is stable; intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pro?.id])
 
   // Load schedule rows + offered services + centro catalog whenever
@@ -161,10 +186,22 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       setOffered(offMap)
       setOfferedOriginal({ ...offMap })
 
+      // Re-anchor snapshot now that schedule + offered have settled.
+      // Sibling effect for basic+profile may have already done this with
+      // the empty arrays; this call captures the loaded values.
+      dirtyForm.resetSnapshot({
+        basic,
+        profile,
+        schedule: schedRows,
+        offered:  offMap,
+      })
+
       setLoadingExtra(false)
     }
     load()
     return () => { alive = false }
+    // dirtyForm reference is stable; intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pro?.id, clientId])
 
   // ── validation ──
@@ -390,6 +427,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         years_experience: profile.years_experience ?? null,
       })
       onChanged?.()
+      dirtyForm.registerSaved()
       setSaving(false)
 
       if (wasNew) {
@@ -400,7 +438,10 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         // Stay open in edit mode so the user can upload photo/docs.
       } else {
         flashToast?.({ kind: 'ok', msg: '✓ Guardado' })
-        onClose()
+        // Self-mode is rendered inline (no close concept); the editor
+        // stays mounted as a settings sub-screen. Admin-modal mode
+        // closes after save.
+        if (!isSelfMode) onClose()
       }
     } catch (e) {
       setSaving(false)
@@ -425,7 +466,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           </div>
           {!isSelfMode && (
             <button
-              onClick={() => !saving && onClose()}
+              onClick={() => !saving && guard?.confirm(() => onClose())}
               disabled={saving}
               aria-label="Cerrar"
               style={{
@@ -553,7 +594,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           {error && <div style={{ flex: 1, fontSize: 12, color: T.danger, lineHeight: 1.4 }}>{error}</div>}
           {!error && <div style={{ flex: 1 }} />}
           {!isSelfMode && (
-            <button onClick={onClose} style={btn('ghost')} disabled={saving}>Cancelar</button>
+            <button onClick={() => guard?.confirm(() => onClose())} style={btn('ghost')} disabled={saving}>Cancelar</button>
           )}
           <button onClick={handleSave} style={btn('primary')} disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar'}
@@ -573,7 +614,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       }}>{body}</div>
     </div>
   ) : (
-    <div onClick={() => !saving && onClose()} style={{
+    <div onClick={() => !saving && guard?.confirm(() => onClose())} style={{
       position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.45)',
       display: 'grid', placeItems: 'center', zIndex: 60, padding: 16,
     }}>

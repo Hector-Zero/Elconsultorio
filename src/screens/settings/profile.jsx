@@ -30,7 +30,16 @@ export default function ProfileSettings() {
   const [saving,       setSaving]       = useState(false)
   const [saveStatus,   setSaveStatus]   = useState(null)
   const [uploading,    setUploading]    = useState(false)
+  // Toast plumbed into the self-mode ProfessionalEditor render (below)
+  // so admin's empresa-mode pros get "✓ Guardado" feedback. Mirrors
+  // the professionals.jsx pattern.
+  const [selfToast,    setSelfToast]    = useState(null)
   const fileInputRef = React.useRef(null)
+
+  function flashSelfToast(t, ms = 2500) {
+    setSelfToast(t)
+    setTimeout(() => setSelfToast(null), ms)
+  }
 
   // Fetch fresh on mount so all fields reflect DB truth, regardless of context.
   useEffect(() => {
@@ -242,13 +251,24 @@ export default function ProfileSettings() {
   // to a treating pro. Render the canonical pro-self-edit view instead.
   if (isPro && empresaMode) {
     return (
-      <ProfessionalEditor
-        clientId={clientId}
-        initialPro={professional}
-        mode="self"
-        onClose={() => {}}
-        onChanged={() => { refreshFirstPro?.() }}
-      />
+      <>
+        <ProfessionalEditor
+          clientId={clientId}
+          initialPro={professional}
+          mode="self"
+          onClose={() => {}}
+          onChanged={() => { refreshFirstPro?.() }}
+          flashToast={flashSelfToast}
+        />
+        {selfToast && (
+          <div style={{
+            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            padding: '10px 18px', borderRadius: 8, fontSize: 13, zIndex: 80,
+            background: selfToast.kind === 'err' ? T.danger : T.primary, color: '#fff',
+            boxShadow: '0 8px 24px rgba(20,18,14,0.25)',
+          }}>{selfToast.msg}</div>
+        )}
+      </>
     )
   }
 
