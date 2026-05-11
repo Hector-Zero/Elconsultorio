@@ -1,9 +1,10 @@
-import React, { useState, useEffect, Component } from 'react'
+import React, { useState, useEffect, useContext, useCallback, Component } from 'react'
 import { supabase } from './lib/supabase.js'
 import { ClientCtx } from './lib/ClientCtx.js'
 import { useClientBootstrap } from './lib/useClientBootstrap.js'
 import { useClientConfig } from './lib/useClientConfig.js'
 import { ClientConfigCtx } from './lib/ClientConfigCtx.js'
+import { DirtyGuardProvider, DirtyGuardCtx } from './lib/DirtyGuardContext.jsx'
 import { flattenEmployment } from './lib/flattenEmployment.js'
 import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
@@ -167,12 +168,33 @@ export default function App() {
           loading:   configFetch.loading,
           error:     configFetch.error,
         }}>
-          <div key={themeVersion} style={{ height: '100vh', display: 'flex', overflow: 'hidden' }}>
-            <Screen onNavigate={navigate} param={param} />
-            <AssistantFAB />
-          </div>
+          <DirtyGuardProvider>
+            <GuardedShell
+              themeVersion={themeVersion}
+              Screen={Screen}
+              param={param}
+              rawNavigate={navigate}
+            />
+          </DirtyGuardProvider>
         </ClientConfigCtx.Provider>
       </ClientCtx.Provider>
     </ErrorBoundary>
+  )
+}
+
+// Inner shell so the wrapped navigate can consume DirtyGuardCtx. Any
+// navigation request runs through guard.confirm: if a registered form
+// is dirty, the central confirm modal intercepts; otherwise the hash
+// is updated immediately.
+function GuardedShell({ themeVersion, Screen, param, rawNavigate }) {
+  const guard = useContext(DirtyGuardCtx)
+  const navigate = useCallback((id) => {
+    guard.confirm(() => rawNavigate(id))
+  }, [guard, rawNavigate])
+  return (
+    <div key={themeVersion} style={{ height: '100vh', display: 'flex', overflow: 'hidden' }}>
+      <Screen onNavigate={navigate} param={param} />
+      <AssistantFAB />
+    </div>
   )
 }

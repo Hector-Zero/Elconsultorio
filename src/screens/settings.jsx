@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useContext } from 'react'
-import { T, Icon, Sidebar, TopBar, ConfirmModal } from './shared.jsx'
+import React, { useState, useEffect, useRef, useContext } from 'react'
+import { T, Icon, Sidebar, TopBar } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
+import { DirtyGuardCtx } from '../lib/DirtyGuardContext.jsx'
 import { fetchClientConfig } from '../lib/clientConfig.js'
 import BotConfig from './settings/botConfig.jsx'
 import ProfileSettings from './settings/profile.jsx'
@@ -53,12 +54,22 @@ export default function SettingsScreen({ onNavigate }) {
   const defaultSection = isPro ? 'profile' : (empresaMode ? 'empresa' : 'profile')
   const [section, setSection] = useState(defaultSection)
   const [profileDirty, setProfileDirty] = useState(false)
-  const [pendingNav, setPendingNav]     = useState(null) // () => void
 
-  function tryNav(action) {
-    if (profileDirty && section === 'profile') { setPendingNav(() => action); return }
-    action()
-  }
+  // Bridge the existing profileDirty signal into the central guard until
+  // commit 2 refactors profile.jsx to call useDirtyForm directly. The
+  // dirty getter must read live state, so we mirror profileDirty and
+  // section through refs and register a stable closure once.
+  const guard = useContext(DirtyGuardCtx)
+  const dirtyStateRef = useRef({ dirty: false, section })
+  dirtyStateRef.current = { dirty: profileDirty, section }
+  useEffect(() => {
+    if (!guard) return
+    guard.register('settings/profile', () => {
+      const { dirty, section: s } = dirtyStateRef.current
+      return dirty && s === 'profile'
+    })
+    return () => guard.unregister('settings/profile')
+  }, [guard])
 
   useEffect(() => {
     if (!sections.find(s => s.id === section)) setSection(sections[0]?.id ?? 'profile')
@@ -75,7 +86,7 @@ export default function SettingsScreen({ onNavigate }) {
 
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', background: T.bg, fontFamily: T.sans, color: T.ink }}>
-      <Sidebar active="settings" onNavigate={(id) => tryNav(() => onNavigate(id))} />
+      <Sidebar active="settings" onNavigate={onNavigate} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <TopBar title="Ajustes" subtitle="Configura tu consulta, el bot y las integraciones" />
@@ -85,7 +96,7 @@ export default function SettingsScreen({ onNavigate }) {
             {sections.map(s => {
               const on = section === s.id
               return (
-                <div key={s.id} onClick={() => tryNav(() => setSection(s.id))} style={{
+                <div key={s.id} onClick={() => guard?.confirm(() => setSection(s.id))} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '9px 10px', borderRadius: 8,
                   background: on ? T.bgRaised : 'transparent',
@@ -115,22 +126,6 @@ export default function SettingsScreen({ onNavigate }) {
           </div>
         </div>
       </div>
-      {pendingNav && (
-        <ConfirmModal
-          title="Tienes cambios sin guardar"
-          description="¿Quieres salir sin guardar los cambios?"
-          confirmLabel="Salir sin guardar"
-          cancelLabel="Seguir editando"
-          variant="danger"
-          onConfirm={() => {
-            const fn = pendingNav
-            setProfileDirty(false)
-            setPendingNav(null)
-            fn()
-          }}
-          onCancel={() => setPendingNav(null)}
-        />
-      )}
     </div>
   )
 }
