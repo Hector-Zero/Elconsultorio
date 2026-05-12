@@ -35,7 +35,8 @@
       (function () {
         try {
           var savedId = localStorage.getItem('last_theme_id');
-          if (!savedId) return;
+          console.log('[inline] start, savedId =', savedId);
+          if (!savedId) { console.log('[inline] bail: no savedId'); return; }
 
           var THEMES = {
             'rosa-palo': {
@@ -69,7 +70,7 @@
           };
 
           var c = THEMES[savedId];
-          if (!c) return;
+          if (!c) { console.log('[inline] bail: unknown theme id', savedId); return; }
 
           // Mirror of softenHex in src/screens/shared.jsx — mix each
           // channel toward white at ratio 0.12. Sanity check, kept as
@@ -99,7 +100,8 @@
           root.setProperty('--color-border',             c.border);
           root.setProperty('--color-text',               c.text);
           root.setProperty('--color-text-muted',         c.textMuted);
-        } catch (e) { /* non-fatal — fall through to default theme */ }
+          console.log('[inline] applied', savedId);
+        } catch (e) { console.log('[inline] threw', e); /* non-fatal — fall through to default theme */ }
       })();
     </script>
   </head>

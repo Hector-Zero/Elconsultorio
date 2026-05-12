@@ -10,7 +10,11 @@ import { DEFAULT_THEME_ID } from '../config/themes.js'
 // preserve the centro's brand. Never call resolveActiveThemeId from
 // those surfaces.
 export function resolveActiveThemeId({ proThemeId, centroThemeId, isPro }) {
-  if (isPro && proThemeId) return proThemeId
-  if (centroThemeId) return centroThemeId
-  return DEFAULT_THEME_ID
+  console.log('[resolver] inputs', { proThemeId, centroThemeId, isPro })
+  let returnValue
+  if (isPro && proThemeId) returnValue = proThemeId
+  else if (centroThemeId)  returnValue = centroThemeId
+  else                     returnValue = DEFAULT_THEME_ID
+  console.log('[resolver] returns', returnValue)
+  return returnValue
 }

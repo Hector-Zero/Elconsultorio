@@ -68,6 +68,7 @@ function loadGoogleFont(name) {
 // Apply a full theme. Mutates T tokens and CSS vars on :root.
 // Caller must re-render (e.g. bump a key) to pick up T changes.
 export function applyTheme(theme) {
+  console.log('[applyTheme] called with', theme?.id || theme, 'stack:', new Error().stack?.split('\n')[2])
   if (!theme?.colors) return
   const c = theme.colors
   const primarySoft = softenHex(c.primary, 0.12)
