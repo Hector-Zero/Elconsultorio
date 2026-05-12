@@ -106,16 +106,16 @@ export default function App() {
   }, [session?.user?.id, bootstrap.clientId, professionalRefresh])
 
   useEffect(() => {
-    // While bootstrap is loading OR professional context is still
-    // resolving, the loading-screen gate below at line 138 is showing
-    // the Loader, and index.html's pre-mount inline script has already
-    // set :root CSS vars from the localStorage cache. The cache is the
-    // authoritative source for this window — running applyTheme with
-    // partial null inputs would resolve to DEFAULT_THEME_ID and
-    // overwrite the cache with Verde Salud values (visible Verde
-    // flash). Defer applyTheme until both inputs are settled; the
-    // resolver then runs once with real values.
-    if (bootstrap.loading || professional === undefined) return
+    // Guard matches the loading-screen render gate below verbatim.
+    // While the Loader is visible, the inline script in index.html
+    // has already set :root CSS vars from the localStorage cache —
+    // that's the authoritative theme for the entire loading window.
+    // Running applyTheme with partial inputs (e.g. professional
+    // transiently null while session is still loading) would resolve
+    // isPro=false and overwrite the cached pro theme with the centro
+    // fallback, producing a visible flash. Defer until session,
+    // bootstrap, and (if signed in) professional have all settled.
+    if (session === undefined || bootstrap.loading || (session && professional === undefined)) return
     const activeThemeId = resolveActiveThemeId({
       proThemeId:    professional?.theme_id,
       centroThemeId: bootstrap.themeId,
@@ -123,7 +123,7 @@ export default function App() {
     })
     applyTheme(getTheme(activeThemeId))
     setThemeVersion(v => v + 1)
-  }, [bootstrap.themeId, professional, bootstrap.loading])
+  }, [bootstrap.themeId, professional, bootstrap.loading, session])
 
   // ONBOARDING STEP 1: Profile must be completed before the app is fully functional.
   // The bot system prompt, email notifications, certificates, and agenda all depend
