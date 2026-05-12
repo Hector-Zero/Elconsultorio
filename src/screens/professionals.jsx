@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase.js'
 import { flattenEmployment } from '../lib/flattenEmployment.js'
 import ProCard             from './professionals/proCard.jsx'
 import ProfessionalEditor  from './professionals/professionalEditor.jsx'
+import Loader              from '../components/Loader.jsx'
 
 // ───── Screen ─────
 export default function ProfessionalsScreen({ onNavigate }) {
@@ -174,9 +175,7 @@ export default function ProfessionalsScreen({ onNavigate }) {
 
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 24px 40px' }}>
           {loading ? (
-            <div style={{ padding: 40, color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif, textAlign: 'center' }}>
-              Cargando…
-            </div>
+            <Loader size="inline" />
           ) : pros.length === 0 ? (
             <div style={{
               padding: 60, textAlign: 'center',

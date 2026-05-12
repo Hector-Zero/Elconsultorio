@@ -7,6 +7,7 @@ import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
 import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import { SettingsHeader, FieldRow, textInput, formatRut } from './_shared.jsx'
 import EmpresaWizard from './empresaWizard.jsx'
+import Loader from '../../components/Loader.jsx'
 
 // ───── Empresa — modo empresa wizard + active form ─────
 export default function EmpresaSettings({ onActivated, onNavigate }) {
@@ -38,9 +39,7 @@ export default function EmpresaSettings({ onActivated, onNavigate }) {
     return () => { alive = false }
   }, [clientId])
 
-  if (!loaded) return (
-    <div style={{ padding: 40, color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif }}>cargando…</div>
-  )
+  if (!loaded) return <Loader size="inline" />
 
   // Decision uses ONLY the freshly fetched Supabase value, never ClientCtx.
   const empresaMode = !!freshConfig?.modo_empresa

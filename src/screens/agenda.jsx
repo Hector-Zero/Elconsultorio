@@ -5,6 +5,7 @@ import { useClientBootstrap } from '../lib/useClientBootstrap.js'
 import { flattenEmployment } from '../lib/flattenEmployment.js'
 import { supabase } from '../lib/supabase.js'
 import CitaModal from './agenda/citaModal'
+import Loader from '../components/Loader.jsx'
 import {
   STATUS_LABELS, DOW_KEY_BY_NUM, HOURS, TZ,
   addDays, addMonths, daysInMonth, fmtDay, fmtMonth, fmtRange,
@@ -450,11 +451,7 @@ export default function AgendaScreen({ onNavigate }) {
             />
           )}
 
-          {loading && (
-            <div style={{ padding: '24px 0', textAlign: 'center', color: T.inkMuted, fontFamily: T.serif, fontStyle: 'italic' }}>
-              Cargando agenda…
-            </div>
-          )}
+          {loading && <Loader size="inline" />}
         </div>
       </div>
 

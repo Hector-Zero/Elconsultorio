@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { T, Icon } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
+import Loader from '../../components/Loader.jsx'
 
 const DOC_BUCKET = 'professional-documents'
 const DOC_MAX_BYTES = 10 * 1024 * 1024
@@ -175,7 +176,7 @@ export default function DocumentsSection({ profileId, disabled }) {
       )}
 
       {loading ? (
-        <div style={{ padding: 18, color: T.inkMuted, fontStyle: 'italic', fontSize: 12.5 }}>Cargando…</div>
+        <Loader size="inline" />
       ) : docs.length === 0 && !showForm ? (
         <div style={{
           padding: 22, background: T.bgSunk, border: `1px dashed ${T.line}`, borderRadius: 10,

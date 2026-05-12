@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase.js'
 import { mergeClientConfig } from '../../lib/clientConfig.js'
 import { useDirtyForm } from '../../lib/useDirtyForm.js'
 import { SettingsHeader, FieldRow, Toggle, textInput } from './_shared.jsx'
+import Loader from '../../components/Loader.jsx'
 
 // ───── Bot config — wired to agents_config + clients.config ─────
 export default function BotConfig() {
@@ -87,9 +88,7 @@ export default function BotConfig() {
     setTimeout(() => setSaveStatus(null), 2500)
   }
 
-  if (loading) return (
-    <div style={{ padding: 40, color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif }}>cargando…</div>
-  )
+  if (loading) return <Loader size="inline" />
 
   if (fetchError) return (
     <div style={{ padding: 40, color: T.error, fontSize: 13 }}>

@@ -11,6 +11,7 @@ import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
 import Login from './Login.jsx'
 import ClaimModal from './ClaimModal.jsx'
+import Loader from './components/Loader.jsx'
 import LeadsScreen         from './screens/leads.jsx'
 import AgendaScreen        from './screens/agenda.jsx'
 import PatientsScreen      from './screens/patients.jsx'
@@ -136,11 +137,7 @@ export default function App() {
   }, [bootstrap.clientId, proRefresh])
 
   if (session === undefined || bootstrap.loading || (session && professional === undefined)) {
-    return (
-      <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: T.bgSunk }}>
-        <div style={{ fontFamily: T.serif, fontSize: 22, color: T.inkMuted, fontStyle: 'italic' }}>cargando…</div>
-      </div>
-    )
+    return <Loader />
   }
 
   if (!session) return <Login />

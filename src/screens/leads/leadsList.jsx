@@ -1,6 +1,7 @@
 import React from 'react'
 import { T, Icon, btn } from '../shared.jsx'
 import { statusOf, nameOf, phoneOf, leadDisplayName, excerpt, LeadAvatar, COL_DEFS, StatusPill, timeAgo } from './_shared.jsx'
+import Loader from '../../components/Loader.jsx'
 
 export default function LeadsList({
   listRef,
@@ -133,11 +134,7 @@ export default function LeadsList({
 
       {/* rows */}
       <div style={{ flex: 1, overflow: 'auto' }}>
-        {loading && (
-          <div style={{ padding: '40px 24px', textAlign: 'center', color: T.inkMuted, fontFamily: T.serif, fontStyle: 'italic' }}>
-            Cargando leads…
-          </div>
-        )}
+        {loading && <Loader size="inline" />}
 
         {!loading && fetchError && (
           <div style={{ margin: '24px', padding: '14px 16px', borderRadius: 10, background: T.dangerSoft, border: `1px solid ${T.danger}22` }}>

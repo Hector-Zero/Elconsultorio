@@ -3,6 +3,7 @@ import { T, Icon, Avatar, btn, SectionLabel, avatarTint, avatarInk } from '../sh
 import { supabase } from '../../lib/supabase.js'
 import { ClientCtx } from '../../lib/ClientCtx.js'
 import { fmtShortDate, fmtLongDate } from './_shared.jsx'
+import Loader from '../../components/Loader.jsx'
 
 function InlineField({ label, value, mono, placeholder, onSave }) {
   const [editing, setEditing] = useState(false)
@@ -266,7 +267,7 @@ export default function PatientQuickPanel({ p, onNavigate, updatePatient }) {
             display: 'flex', alignItems: 'center', gap: 8, minHeight: 20,
           }}>
             {loadingClin
-              ? <><Spinner /> Cargando…</>
+              ? <Loader size="inline" />
               : !assignment
                 ? 'Sin profesional asignado para este paciente.'
                 : sessions.length === 0

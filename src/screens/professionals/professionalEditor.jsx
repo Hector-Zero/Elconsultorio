@@ -9,6 +9,7 @@ import PhotoBioSection      from './photoBioSection.jsx'
 import ScheduleSection      from './scheduleSection.jsx'
 import SessionTypesSection  from './sessionTypesSection.jsx'
 import DocumentsSection     from './documentsSection.jsx'
+import Loader               from '../../components/Loader.jsx'
 
 const textInput = {
   padding: '10px 12px', borderRadius: 8,
@@ -549,7 +550,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
           {/* SECTION 3 — AGENDA */}
           <SectionLabel icon="calendar" label="Días y horarios de atención" />
           {loadingExtra ? (
-            <div style={{ padding: 14, color: T.inkMuted, fontSize: 12.5, fontStyle: 'italic' }}>Cargando agenda…</div>
+            <Loader size="inline" />
           ) : (
             <ScheduleSection value={schedule} onChange={setSchedule} />
           )}
@@ -561,7 +562,7 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
               {/* SECTION 4 — SERVICIOS OFRECIDOS (Empresa mode only) */}
               <SectionLabel icon="briefcase" label="Servicios que ofrece" />
               {loadingExtra ? (
-                <div style={{ padding: 14, color: T.inkMuted, fontSize: 12.5, fontStyle: 'italic' }}>Cargando servicios…</div>
+                <Loader size="inline" />
               ) : (
                 <SessionTypesSection
                   catalog={catalog}

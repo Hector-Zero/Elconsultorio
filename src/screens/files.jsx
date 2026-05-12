@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react'
 import { T, Icon, Sidebar, Avatar, TopBar, btn, CLP } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
+import Loader from '../components/Loader.jsx'
 
 const TZ = 'America/Santiago'
 const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
@@ -212,7 +213,7 @@ export default function FilesScreen({ onNavigate, param }) {
     return (
       <div style={{ display:'flex', height:'100%', width:'100%', background:T.bg, fontFamily:T.sans }}>
         <Sidebar active="files" onNavigate={onNavigate} />
-        <div style={{ flex:1, display:'grid', placeItems:'center', color:T.inkMuted, fontFamily:T.serif, fontStyle:'italic' }}>cargando ficha…</div>
+        <div style={{ flex:1, display:'grid', placeItems:'center' }}><Loader size="inline" /></div>
       </div>
     )
   }

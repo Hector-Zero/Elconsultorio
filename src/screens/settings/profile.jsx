@@ -7,6 +7,7 @@ import { mergeClientConfig, fetchClientConfig } from '../../lib/clientConfig.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
 import { syncSchedules } from '../../lib/syncSchedules.js'
 import { useDirtyForm } from '../../lib/useDirtyForm.js'
+import Loader from '../../components/Loader.jsx'
 import ProfessionalEditor from '../professionals/professionalEditor.jsx'
 import { DAYS, DEFAULT_AVAILABILITY, SmallToggle, SettingsHeader, FieldRow, textInput, formatRut, TimePicker } from './_shared.jsx'
 
@@ -432,7 +433,7 @@ function PerfilDisponibilidad({ clientId, config, availability, onAvailabilityLo
     <div style={{ marginTop: 28, paddingTop: 22, borderTop: `1px solid ${T.lineSoft}` }}>
       <SectionLabel icon="calendar" label="Disponibilidad semanal" />
       {loading || !availability ? (
-        <div style={{ padding: 16, color: T.inkMuted, fontStyle: 'italic', fontSize: 13 }}>cargando…</div>
+        <Loader size="inline" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {DAYS.map(([key, label]) => {

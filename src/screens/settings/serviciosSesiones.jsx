@@ -3,6 +3,7 @@ import { T, Icon, btn, SectionLabel } from '../shared.jsx'
 import { ClientCtx } from '../../lib/ClientCtx.js'
 import { supabase } from '../../lib/supabase.js'
 import { useDirtyForm } from '../../lib/useDirtyForm.js'
+import Loader from '../../components/Loader.jsx'
 
 const textInput = {
   padding: '10px 12px', borderRadius: 8,
@@ -169,9 +170,7 @@ export default function ServiciosSesionesSettings() {
     return (
       <div style={{ padding: '24px 32px 40px', maxWidth: 880 }}>
         <SettingsHeader title="Servicios y Sesiones" subtitle="Catálogo de servicios y precios del centro" />
-        <div style={{ padding: 40, color: T.inkMuted, fontStyle: 'italic', fontFamily: T.serif, textAlign: 'center' }}>
-          Cargando…
-        </div>
+        <Loader size="inline" />
       </div>
     )
   }

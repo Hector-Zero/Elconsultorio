@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react'
 import { T, Icon, Sidebar, Avatar, TopBar, btn, CLP } from './shared.jsx'
 import { ClientCtx } from '../lib/ClientCtx.js'
 import { supabase } from '../lib/supabase.js'
+import Loader from '../components/Loader.jsx'
 
 const TZ = 'America/Santiago'
 const MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
@@ -142,9 +143,7 @@ export default function BillingScreen({ onNavigate }) {
                 <div>Método</div><div>Estado</div><div />
               </div>
 
-              {loading && (
-                <div style={{ padding: 32, textAlign: 'center', color: T.inkMuted, fontFamily: T.serif, fontStyle: 'italic' }}>cargando boletas…</div>
-              )}
+              {loading && <Loader size="inline" />}
               {!loading && invoices.length === 0 && (
                 <div style={{ padding: 32, textAlign: 'center', color: T.inkMuted, fontFamily: T.serif, fontStyle: 'italic' }}>Sin boletas registradas todavía.</div>
               )}
