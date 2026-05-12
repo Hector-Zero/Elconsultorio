@@ -1212,6 +1212,36 @@ overwrites first. Aesthetically wasteful, would surface in performance
 audits. Tackle in a focused effect-dep hygiene pass when needed. Not
 a launch blocker.
 
+### 69. Patient-facing surface theme rule (2026-05-12)
+
+**Status**: Convention locked. Enforced via code comments + this
+doc note. Not enforced via lint or type system (no surface yet
+exists to lint).
+
+**Rule**: Patient-facing surfaces — public booking pages, themed
+emails, future public profile pages, bot output if it ever
+renders styled content — must read `clients.config.theme_id`
+directly. They must NOT call `resolveActiveThemeId()`, which
+factors in `professional_profiles.theme_id` (a pro's personal
+override).
+
+**Why**: A pro's personal theme is a dashboard personalization,
+not a brand. The centro's `clients.config.theme_id` is the
+public brand visible to patients. Patient-facing surfaces must
+render the brand, not whichever pro happens to be associated
+with that patient.
+
+**When this matters**: The first patient-facing themed surface
+built (likely the public profile page deferred per gap 51) is
+where this rule first becomes enforceable. Until then it's
+purely defensive documentation.
+
+**What to do if violating**: If you find yourself wanting to
+call `resolveActiveThemeId()` from a patient-facing surface,
+stop and read this gap entry. The correct pattern is a direct
+read from `clients.config.theme_id` or a centro-scoped helper
+that bypasses the resolver entirely.
+
 ---
 
 ## PHASE 3 — Major future work
