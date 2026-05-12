@@ -15,6 +15,93 @@
       html, body, #root { height: 100%; }
       body { font-family: 'Inter', sans-serif; }
     </style>
+    <!--
+      Pre-mount theme application. Reads the user's last saved
+      theme from localStorage and applies CSS variables to :root
+      synchronously, before any React code runs. Without this, the
+      loading screen renders in the default theme (Verde Salud)
+      for ~200ms during hard refresh regardless of the user's
+      actual saved preference.
+
+      Sync source-of-truth duplication: the THEMES color map here
+      must stay in sync with src/config/themes.js. Both share the
+      same CSS variable names and hex values. If you add or remove
+      themes, or change theme color values, update both places.
+
+      Lightweight (no module imports possible at this stage in the
+      page lifecycle, so the duplication is intentional).
+    -->
+    <script>
+      (function () {
+        try {
+          var savedId = localStorage.getItem('last_theme_id');
+          if (!savedId) return;
+
+          var THEMES = {
+            'rosa-palo': {
+              primary: '#d4688a', primaryText: '#ffffff',
+              background: '#fff8f9', sidebar: '#fdf0f3',
+              sidebarText: '#6b2d45', sidebarTextMuted: '#b07a90',
+              surface: '#ffffff', surfaceHover: '#fff0f4',
+              border: '#f5c6d8', text: '#3d1a27', textMuted: '#9e6070'
+            },
+            'lavanda-pro': {
+              primary: '#7c5cbf', primaryText: '#ffffff',
+              background: '#f7f5ff', sidebar: '#f0ecff',
+              sidebarText: '#3b1f7a', sidebarTextMuted: '#8b72c8',
+              surface: '#ffffff', surfaceHover: '#f3f0ff',
+              border: '#ddd6fe', text: '#2d1f4a', textMuted: '#7c6b9e'
+            },
+            'verde-salud': {
+              primary: '#2f4a3a', primaryText: '#ffffff',
+              background: '#f8faf9', sidebar: '#1e3329',
+              sidebarText: '#e8f5ee', sidebarTextMuted: '#7aab8a',
+              surface: '#ffffff', surfaceHover: '#f2f8f4',
+              border: '#d1e8d9', text: '#1a2e22', textMuted: '#5a7a65'
+            },
+            'carbon': {
+              primary: '#818cf8', primaryText: '#0f0f14',
+              background: '#16161e', sidebar: '#0f0f14',
+              sidebarText: '#e8e8f0', sidebarTextMuted: '#6b6b80',
+              surface: '#1e1e2a', surfaceHover: '#252535',
+              border: '#2a2a3a', text: '#e8e8f0', textMuted: '#8888a0'
+            }
+          };
+
+          var c = THEMES[savedId];
+          if (!c) return;
+
+          // Mirror of softenHex in src/screens/shared.jsx — mix each
+          // channel toward white at ratio 0.12. Sanity check, kept as
+          // a comment to flag drift if either copy is edited:
+          //   '#2f4a3a' → '#e6e9e7'  (verde-salud primary → soft)
+          function softenHex(hex) {
+            if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+            var h = hex.slice(1);
+            var r = parseInt(h.slice(0, 2), 16);
+            var g = parseInt(h.slice(2, 4), 16);
+            var b = parseInt(h.slice(4, 6), 16);
+            function mix(x) { return Math.round(x * 0.12 + 255 * 0.88); }
+            function toHex(n) { return n.toString(16).padStart(2, '0'); }
+            return '#' + toHex(mix(r)) + toHex(mix(g)) + toHex(mix(b));
+          }
+
+          var root = document.documentElement.style;
+          root.setProperty('--color-primary',            c.primary);
+          root.setProperty('--color-primary-soft',       softenHex(c.primary));
+          root.setProperty('--color-primary-text',       c.primaryText);
+          root.setProperty('--color-background',         c.background);
+          root.setProperty('--color-sidebar',            c.sidebar);
+          root.setProperty('--color-sidebar-text',       c.sidebarText);
+          root.setProperty('--color-sidebar-text-muted', c.sidebarTextMuted);
+          root.setProperty('--color-surface',            c.surface);
+          root.setProperty('--color-surface-hover',      c.surfaceHover);
+          root.setProperty('--color-border',             c.border);
+          root.setProperty('--color-text',               c.text);
+          root.setProperty('--color-text-muted',         c.textMuted);
+        } catch (e) { /* non-fatal — fall through to default theme */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

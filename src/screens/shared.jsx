@@ -111,6 +111,15 @@ export function applyTheme(theme) {
   root.setProperty('--color-border',             c.border)
   root.setProperty('--color-text',               c.text)
   root.setProperty('--color-text-muted',         c.textMuted)
+
+  // Persist the active theme id so index.html's inline pre-mount
+  // script can apply CSS variables on the next hard refresh, before
+  // React mounts. The two locations are coupled — any new theme id
+  // added to src/config/themes.js must also be added to the inline
+  // THEMES map in index.html's <head> script.
+  if (theme.id) {
+    try { localStorage.setItem('last_theme_id', theme.id) } catch (e) { /* private mode etc. — non-fatal */ }
+  }
 }
 
 // ───────────── icons ─────────────
