@@ -67,6 +67,7 @@ export default function App() {
   const [professional, setProfessional] = useState(undefined) // undefined = loading, null = admin mode
   const [firstPro, setFirstPro] = useState(null)
   const [proRefresh, setProRefresh] = useState(0)
+  const [professionalRefresh, setProfessionalRefresh] = useState(0)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null))
@@ -91,7 +92,7 @@ export default function App() {
         if (error) console.warn('[App] employment lookup failed', error)
         setProfessional(flattenEmployment(data))
       })
-  }, [session?.user?.id, bootstrap.clientId])
+  }, [session?.user?.id, bootstrap.clientId, professionalRefresh])
 
   useEffect(() => {
     const activeThemeId = resolveActiveThemeId({
@@ -166,6 +167,11 @@ export default function App() {
           ? !(bootstrap.empresaNombre?.trim())
           : (!firstPro || !(firstPro.full_name?.trim())),
         refreshFirstPro: () => setProRefresh(v => v + 1),
+        // Re-fires the professional context fetch above. Used by editors
+        // that mutate professional_profiles fields App.jsx reads (e.g.,
+        // Apariencia's pro-mode save updates theme_id, which the theme
+        // resolver effect consumes via professional.theme_id).
+        refreshProfessional: () => setProfessionalRefresh(v => v + 1),
       }}>
         <ClientConfigCtx.Provider value={{
           config:    configFetch.config,

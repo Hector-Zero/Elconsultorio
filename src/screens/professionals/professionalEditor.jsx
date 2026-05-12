@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react'
+import React, { useState, useEffect, useRef, useContext } from 'react'
 import { T, btn, SectionLabel, initials, PRO_COLORS } from '../shared.jsx'
 import { supabase } from '../../lib/supabase.js'
 import { flattenEmployment } from '../../lib/flattenEmployment.js'
@@ -64,13 +64,26 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
 
   // Dirty guard. scheduleOriginal/offeredOriginal already exist for the
   // DB-diff sync (different purpose); this hook independently tracks
-  // unsaved edits for navigation prompts. Both load effects below call
-  // resetSnapshot once their fetched values settle into state.
+  // unsaved edits for navigation prompts.
   const guard = useContext(DirtyGuardCtx)
   const dirtyForm = useDirtyForm(
     'editor.professional',
     () => ({ basic, profile, schedule, offered }),
   )
+
+  // Coordination across two parallel async effects: effect 1 loads
+  // basic/profile from professional_employments → professional_profiles,
+  // effect 2 loads schedule + offered. Calling resetSnapshot from either
+  // effect's closure would read stale useState values for the OTHER
+  // effect's fields (snapshot race). Refs let each effect write its
+  // loaded values atomically, and resetSnapshot fires only when both
+  // sides are populated.
+  const loadedRef = useRef({ basicProfile: null, scheduleOffered: null })
+  function tryResetSnapshot() {
+    const bp = loadedRef.current.basicProfile
+    const so = loadedRef.current.scheduleOffered
+    if (bp && so) dirtyForm.resetSnapshot({ ...bp, ...so })
+  }
 
   // Lock identity fields when the profile is claimed by SOMEONE ELSE.
   // The claimant editing their own profile (mode === 'self') should
@@ -118,17 +131,8 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
         }
         setBasic(nextBasic)
         setProfile(nextProfile)
-        // Re-anchor the snapshot to the freshly-loaded identity fields.
-        // Schedule + offered come from the sibling effect; if it ran
-        // first, the schedule/offered branches of the snapshot will
-        // already be at their loaded values; if it hasn't run yet, the
-        // sibling effect will resetSnapshot again when it settles.
-        dirtyForm.resetSnapshot({
-          basic:    nextBasic,
-          profile:  nextProfile,
-          schedule,
-          offered,
-        })
+        loadedRef.current.basicProfile = { basic: nextBasic, profile: nextProfile }
+        tryResetSnapshot()
       })
     return () => { alive = false }
     // dirtyForm reference is stable; intentionally omitted.
@@ -186,15 +190,8 @@ export default function ProfessionalEditor({ clientId, initialPro, onClose, onCh
       setOffered(offMap)
       setOfferedOriginal({ ...offMap })
 
-      // Re-anchor snapshot now that schedule + offered have settled.
-      // Sibling effect for basic+profile may have already done this with
-      // the empty arrays; this call captures the loaded values.
-      dirtyForm.resetSnapshot({
-        basic,
-        profile,
-        schedule: schedRows,
-        offered:  offMap,
-      })
+      loadedRef.current.scheduleOffered = { schedule: schedRows, offered: offMap }
+      tryResetSnapshot()
 
       setLoadingExtra(false)
     }

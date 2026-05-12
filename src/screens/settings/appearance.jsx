@@ -19,7 +19,7 @@ import { SettingsHeader } from './_shared.jsx'
 // themes only affect the authenticated dashboard view — never patient
 // surfaces. See src/lib/resolveActiveThemeId.js for the resolver doc.
 export default function AppearanceSettings() {
-  const { clientId, professional } = useContext(ClientCtx)
+  const { clientId, professional, refreshProfessional } = useContext(ClientCtx)
   const { config, setConfig } = useContext(ClientConfigCtx)
   const bootstrap = useClientBootstrap()
 
@@ -120,16 +120,16 @@ export default function AppearanceSettings() {
         return
       }
       setSaving(false)
-      // applyTheme runs directly so the user-visible theme reflects the
-      // save immediately. App.jsx's professional state still holds the
-      // old theme_id post-save (no refresh hook exposed), but its
-      // theme-apply effect's deps don't change so it doesn't re-fire
-      // and overwrite this applyTheme. Latent inconsistency clears on
-      // next page load (App.jsx re-fetches professional via the gap-66
-      // employment lookup). Refresh hook deferred until a code path
-      // requires it.
+      // Belt-and-suspenders: this applyTheme mutates T + :root immediately
+      // so the save feels responsive. refreshProfessional below also
+      // re-fires App.jsx's pro-context fetch, which updates
+      // professional.theme_id in state, triggering the theme-apply effect
+      // there to bump themeVersion and remount GuardedShell. Without the
+      // refresh, Apariencia stays mounted reading stale T values from
+      // pre-mutation closures until the user navigates.
       applyTheme(getTheme(themeId ?? DEFAULT_THEME_ID))
       dirtyForm.registerSaved()
+      refreshProfessional?.()
       setToast({ kind: 'ok', msg: '✓ Apariencia guardada' })
       setTimeout(() => setToast(null), 2500)
       return
