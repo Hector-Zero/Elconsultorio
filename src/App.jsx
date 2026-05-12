@@ -68,6 +68,16 @@ export default function App() {
   const [firstPro, setFirstPro] = useState(null)
   const [proRefresh, setProRefresh] = useState(0)
   const [professionalRefresh, setProfessionalRefresh] = useState(0)
+  // proThemeSaveTick exists solely to drive an App.jsx re-render
+  // after a pro saves their personal theme. App.jsx is where T-aware
+  // context providers live, so a re-render here cascades through all
+  // consumers (Sidebar, TopBar, settings tree), prompting them to
+  // re-read the mutated T values from applyTheme. CRITICAL: this
+  // state MUST NOT be added to the theme-apply effect's dependency
+  // array — that would re-fire setThemeVersion, which keys
+  // GuardedShell and would lose settings.section state on remount.
+  // The tick exists ONLY for cosmetic re-render propagation.
+  const [proThemeSaveTick, setProThemeSaveTick] = useState(0)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null))
@@ -172,6 +182,9 @@ export default function App() {
         // Apariencia's pro-mode save updates theme_id, which the theme
         // resolver effect consumes via professional.theme_id).
         refreshProfessional: () => setProfessionalRefresh(v => v + 1),
+        // Cosmetic re-render trigger for pro-mode theme saves. See the
+        // proThemeSaveTick state declaration above for the full rationale.
+        bumpProThemeSaveTick: () => setProThemeSaveTick(v => v + 1),
       }}>
         <ClientConfigCtx.Provider value={{
           config:    configFetch.config,

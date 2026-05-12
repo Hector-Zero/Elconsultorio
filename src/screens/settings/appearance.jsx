@@ -19,7 +19,7 @@ import { SettingsHeader } from './_shared.jsx'
 // themes only affect the authenticated dashboard view — never patient
 // surfaces. See src/lib/resolveActiveThemeId.js for the resolver doc.
 export default function AppearanceSettings() {
-  const { clientId, professional } = useContext(ClientCtx)
+  const { clientId, professional, bumpProThemeSaveTick } = useContext(ClientCtx)
   const { config, setConfig } = useContext(ClientConfigCtx)
   const bootstrap = useClientBootstrap()
 
@@ -120,23 +120,25 @@ export default function AppearanceSettings() {
         return
       }
       setSaving(false)
-      // applyTheme mutates T + :root in place. Combined with Apariencia's
-      // own local themeId state change (which drives this screen's own
-      // re-render with the new selection), the visual update is
-      // complete without remounting the rest of the shell. Admin mode
-      // takes the same path and works correctly — pro mode now matches.
+      // applyTheme mutates T + :root in place. Apariencia's local
+      // setSaving/setToast cause this screen itself to re-render, but
+      // the surrounding tree (Sidebar, TopBar, settings.jsx) lives
+      // above Apariencia and doesn't see local Apariencia setState.
+      // bumpProThemeSaveTick triggers an App.jsx re-render so the
+      // full tree re-reads the freshly-mutated T values. Admin mode
+      // gets this same cascade for free via setConfig (a setState in
+      // App.jsx's useClientConfig hook); pro mode has no equivalent
+      // App.jsx-level write, so this tick is the substitute.
       //
       // App.jsx's professional.theme_id stays stale until next page
-      // load. That's acceptable because the resolver effect at
-      // App.jsx:97 is the only consumer of that field, it runs on
-      // mount only, and bumping a refresh here would remount
-      // GuardedShell — which clears settings.jsx's section useState
-      // and bounces the user out of Apariencia. If a future code path
-      // starts reading professional.theme_id mid-session, plumb
-      // refreshProfessional through from here (the callback is still
-      // exposed via ClientCtx).
+      // load. That's acceptable because the resolver effect is the
+      // only consumer of that field, it runs on mount only, and
+      // bumping a refresh here would remount GuardedShell — which
+      // clears settings.jsx's section useState and bounces the user
+      // out of Apariencia.
       applyTheme(getTheme(themeId ?? DEFAULT_THEME_ID))
       dirtyForm.registerSaved()
+      bumpProThemeSaveTick?.()
       setToast({ kind: 'ok', msg: '✓ Apariencia guardada' })
       setTimeout(() => setToast(null), 2500)
       return
