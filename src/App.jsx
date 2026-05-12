@@ -125,12 +125,6 @@ export default function App() {
   }, [session, bootstrap.clientId, professionalRefresh])
 
   useEffect(() => {
-    console.log('[theme-effect] fire', {
-      session: session === undefined ? 'undefined' : (session ? 'present' : 'null'),
-      bootstrapLoading: bootstrap.loading,
-      professional: professional === undefined ? 'undefined' : (professional ? 'proObject' : 'null'),
-      bootstrapThemeId: bootstrap.themeId,
-    })
     // Guard matches the loading-screen render gate below verbatim.
     // While the Loader is visible, the inline script in index.html
     // has already set :root CSS vars from the localStorage cache —
@@ -140,17 +134,13 @@ export default function App() {
     // isPro=false and overwrite the cached pro theme with the centro
     // fallback, producing a visible flash. Defer until session,
     // bootstrap, and (if signed in) professional have all settled.
-    if (session === undefined || bootstrap.loading || (session && professional === undefined)) {
-      console.log('[theme-effect] gated')
-      return
-    }
+    if (session === undefined || bootstrap.loading || (session && professional === undefined)) return
     const activeThemeId = resolveActiveThemeId({
       proThemeId:    professional?.theme_id,
       centroThemeId: bootstrap.themeId,
       isPro:         !!professional,
     })
     applyTheme(getTheme(activeThemeId))
-    console.log('[theme-effect] applied', activeThemeId)
     setThemeVersion(v => v + 1)
   }, [bootstrap.themeId, professional, bootstrap.loading, session])
 

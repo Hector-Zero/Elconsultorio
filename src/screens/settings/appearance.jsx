@@ -27,7 +27,19 @@ export default function AppearanceSettings() {
   const proProfileId = professional?.profile_id ?? null
 
   // null = no card highlighted (no saved theme). A string = saved theme id.
-  const [themeId, setThemeId] = useState(config?.theme_id ?? null)
+  // Initializer is mode-aware so the card grid renders the user's actual
+  // theme on first paint — the mount-fetch effect below still runs as a
+  // defensive sync but no longer drives the initial highlight. For pros,
+  // professional.theme_id (from ClientCtx, guaranteed resolved by App.jsx's
+  // loading gate) takes precedence; falls back to centro theme, then
+  // DEFAULT_THEME_ID. For admins, the existing config?.theme_id path
+  // works because admin's mount-fetch updates state synchronously enough
+  // to avoid the flash.
+  const [themeId, setThemeId] = useState(() =>
+    professional
+      ? (professional.theme_id ?? bootstrap.themeId ?? DEFAULT_THEME_ID)
+      : (config?.theme_id ?? null)
+  )
   const [saving, setSaving]   = useState(false)
   const [toast, setToast]     = useState(null)
 
