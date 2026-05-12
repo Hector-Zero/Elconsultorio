@@ -19,7 +19,7 @@ import { SettingsHeader } from './_shared.jsx'
 // themes only affect the authenticated dashboard view — never patient
 // surfaces. See src/lib/resolveActiveThemeId.js for the resolver doc.
 export default function AppearanceSettings() {
-  const { clientId, professional, refreshProfessional } = useContext(ClientCtx)
+  const { clientId, professional } = useContext(ClientCtx)
   const { config, setConfig } = useContext(ClientConfigCtx)
   const bootstrap = useClientBootstrap()
 
@@ -120,16 +120,23 @@ export default function AppearanceSettings() {
         return
       }
       setSaving(false)
-      // Belt-and-suspenders: this applyTheme mutates T + :root immediately
-      // so the save feels responsive. refreshProfessional below also
-      // re-fires App.jsx's pro-context fetch, which updates
-      // professional.theme_id in state, triggering the theme-apply effect
-      // there to bump themeVersion and remount GuardedShell. Without the
-      // refresh, Apariencia stays mounted reading stale T values from
-      // pre-mutation closures until the user navigates.
+      // applyTheme mutates T + :root in place. Combined with Apariencia's
+      // own local themeId state change (which drives this screen's own
+      // re-render with the new selection), the visual update is
+      // complete without remounting the rest of the shell. Admin mode
+      // takes the same path and works correctly — pro mode now matches.
+      //
+      // App.jsx's professional.theme_id stays stale until next page
+      // load. That's acceptable because the resolver effect at
+      // App.jsx:97 is the only consumer of that field, it runs on
+      // mount only, and bumping a refresh here would remount
+      // GuardedShell — which clears settings.jsx's section useState
+      // and bounces the user out of Apariencia. If a future code path
+      // starts reading professional.theme_id mid-session, plumb
+      // refreshProfessional through from here (the callback is still
+      // exposed via ClientCtx).
       applyTheme(getTheme(themeId ?? DEFAULT_THEME_ID))
       dirtyForm.registerSaved()
-      refreshProfessional?.()
       setToast({ kind: 'ok', msg: '✓ Apariencia guardada' })
       setTimeout(() => setToast(null), 2500)
       return
