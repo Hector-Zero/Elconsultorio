@@ -87,7 +87,26 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!session?.user?.id || !bootstrap.clientId) { setProfessional(null); return }
+    // Three states for `professional`:
+    //   undefined → still resolving (theme-apply gate stays engaged)
+    //   null      → auth resolved, definitively no professional context
+    //   object    → pro user, employment + profile data loaded
+    //
+    // Setting null here when session or bootstrap haven't settled
+    // would let the theme-apply gate pass prematurely (null !==
+    // undefined), causing a centro-theme flash before the pro
+    // context fetch completes.
+    if (session === undefined || bootstrap.clientId == null) {
+      setProfessional(undefined)
+      return
+    }
+    if (!session?.user?.id) {
+      // Auth resolved, no logged-in user. The loading-screen gate
+      // has passed by this point and the app renders Login, not
+      // Loader — no theme flash window exists.
+      setProfessional(null)
+      return
+    }
     setProfessional(undefined)
     supabase
       .from('professional_employments')
@@ -103,7 +122,7 @@ export default function App() {
         if (error) console.warn('[App] employment lookup failed', error)
         setProfessional(flattenEmployment(data))
       })
-  }, [session?.user?.id, bootstrap.clientId, professionalRefresh])
+  }, [session, bootstrap.clientId, professionalRefresh])
 
   useEffect(() => {
     console.log('[theme-effect] fire', {
