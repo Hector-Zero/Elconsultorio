@@ -1242,6 +1242,213 @@ stop and read this gap entry. The correct pattern is a direct
 read from `clients.config.theme_id` or a centro-scoped helper
 that bypasses the resolver entirely.
 
+### 70. Templates/Integrations/Plan editor dirty-state wiring (2026-05-12)
+
+Deferred during commit `c082d2f` (dirty-state guard arc).
+
+`src/screens/settings/templates.jsx`, `integrations.jsx`, and
+`plan.jsx` are present in the Ajustes nav but don't have real
+save flows wired up yet:
+
+- **templates.jsx**: fields use uncontrolled `defaultValue` (the
+  "Guardar" button has no onClick handler).
+- **integrations.jsx**: read-only display from `config`; the
+  "Configurar" / "Conectar" buttons are stubs.
+- **plan.jsx**: read-only display from `clients.plan`; the "Ver
+  facturas" / "Cambiar plan" buttons are stubs.
+
+When any of these gains a real save flow (controlled inputs +
+DB write), wire `useDirtyForm` into it following the pattern
+established in profile.jsx / empresa.jsx / botConfig.jsx —
+register an accessor, call `resetSnapshot` after mount-fetch
+loads, call `registerSaved` after successful save. One-line
+additions per editor once the underlying save logic exists.
+
+Not blocking: a screen with no editable state has no dirty
+state to track.
+
+### 71. refreshProfessional infrastructure preserved but unused (2026-05-12)
+
+Added in commit `b5e22e2`, removed from its sole call site in
+commit `fdc619f`. The callback is still exposed via ClientCtx
+from App.jsx but no current code path calls it.
+
+Reason for preservation: cheap infrastructure. May be useful for
+future pro-edits-their-own-data flows that need to refresh
+App.jsx's professional context mid-session (e.g., a pro updating
+their photo, full_name, or bio from a self-edit surface — those
+fields are read by Sidebar/Avatar surfaces consuming `professional`
+from ClientCtx).
+
+If a future surface needs the cascade, call
+`ctx.refreshProfessional()` from the save handler. Note the
+GuardedShell remount caveat documented in gap 72 — if the
+caller is inside settings.jsx (or any screen with internal
+useState that shouldn't reset), prefer `bumpProThemeSaveTick`
+instead, which forces an App.jsx re-render without bumping the
+`themeVersion` key.
+
+### 72. Stale App.jsx professional.theme_id post pro-mode save (2026-05-12)
+
+When a pro saves their personal theme via Apariencia, App.jsx's
+`professional` state retains the **old** `theme_id` until the
+next page mount. The current code reads `professional.theme_id`
+only in the theme-apply effect (App.jsx:138), which runs once
+on mount + once when professional identity changes. After a pro
+save, `applyTheme` is called directly from Apariencia (not via
+the effect), so the user-visible theme is correct — but the
+context value is stale.
+
+Latent inconsistency: if any future code reads
+`professional.theme_id` mid-session (e.g., a centro-themed
+preview rendered alongside the pro's dashboard), it would see
+stale data.
+
+Fix: call `ctx.refreshProfessional()` from Apariencia's save
+handler. Currently **not** done because the cascade triggers
+App.jsx's theme-apply effect → `setThemeVersion` bump →
+GuardedShell remount → loses `settings.section` state and
+bounces the user out of Apariencia. The `proThemeSaveTick`
+pattern (e2efcdc) was introduced to drive an App.jsx re-render
+without the themeVersion bump, but it doesn't refresh
+professional state — only forces consumers to re-read T.
+
+Proper fix would need both: refresh professional state AND
+avoid bumping themeVersion. Probably means splitting the
+theme-apply effect into "read professional.theme_id and
+applyTheme" (deps include professional) vs "bump themeVersion
+for remount" (deps gated more tightly). Tackle if/when a
+consumer of stale professional.theme_id surfaces.
+
+### 73. popstate handling for dirty-state guard (2026-05-12)
+
+The dirty-state guard infrastructure (a504355) covers:
+- SPA-internal navigation (wrapped `navigate` in App.jsx → goes
+  through `guard.confirm`).
+- Page unload (refresh, close tab) via `beforeunload` listener
+  in DirtyGuardProvider.
+
+It does **not** cover browser back/forward buttons. Clicking
+those bypasses the wrapped navigate and the URL hash mutates
+directly, then `hashchange` updates `useHash` state, and the
+dirty form silently unmounts.
+
+Acceptable for now: browser back/forward is uncommon mid-form-
+edit, and beforeunload catches the higher-risk case (refresh
+losing data). If user reports surface, add a `popstate`
+listener in DirtyGuardProvider that intercepts the nav and
+either confirms or restores history state.
+
+Risk: low. Mitigation cost: moderate (popstate semantics are
+fiddly — `pushState`/`replaceState` tricks needed to "undo" a
+back-button if dirty).
+
+### 74. get_bot_context implicit fallback for per-pro services (2026-05-12)
+
+Surfaced during commit `27c26cf` (per-pro services toggle
+restoration, Empresa mode only).
+
+When the bot fetches centro context via `get_bot_context`, the
+services list per professional is built by joining
+`professional_session_types` against `session_types`. For a pro
+with **zero** rows in `professional_session_types`, the bot
+reports "this professional offers zero services" — which is
+factually wrong for the common case of "pro inherits all centro
+services."
+
+Today's UX:
+- Empresa mode: explicit toggle per pro in
+  ProfessionalEditor → Servicios y Sesiones. Default is
+  all-active when the toggle UI was first introduced.
+- Single mode: no toggle UI (per gap 3abecf9). The implicit
+  contract is "the single pro offers everything the centro
+  offers."
+
+Bot behavior should match the implicit contract: if a pro has
+no `professional_session_types` rows, treat them as offering
+all active centro services (read from `session_types` where
+`active=true` directly).
+
+Fix: change the get_bot_context query for the services-per-pro
+section to LEFT JOIN starting from `session_types`, treating
+missing pro rows as implicit `active=true`. Or add a Postgres
+function that performs the fallback. Either way, the bot's
+view of "what services does this pro offer" needs to default to
+the centro catalog when the pro has no explicit overrides.
+
+Part of the bot polish session arc (item 1 cluster).
+
+### 75. Single-mode SPA centro creation flow (2026-05-12)
+
+Currently no SPA centro-creation flow exists. Centros are
+provisioned via direct SQL inserts + manual Supabase Auth
+admin user creation. This is fine for the current "manually
+onboard each centro" model but doesn't scale to self-service
+signup.
+
+Current state:
+- Empresa mode is upgrade-via-wizard (within an existing
+  centro, an admin promotes their Single-mode centro to
+  multi-pro Empresa mode).
+- Single mode is the default state (no `modo_empresa` key in
+  `clients.config`).
+- No surface exists for "create a brand-new centro from
+  scratch."
+
+For self-service signup, an unauthenticated centro-creation
+page would be needed:
+1. Email + password capture → Supabase Auth signup.
+2. Centro slug + name capture → `clients` row insert.
+3. `handle_new_user` trigger creates `users` row linking auth
+   user to centro.
+4. Default Single mode (no `modo_empresa`).
+5. Onboarding wizard for first professional, services, etc.
+
+Deferred until the payments + DTE arc starts (gap 76).
+Self-service signup is part of "can a centro buy
+Elconsultorio without a sales call," which only matters once
+the platform actually charges for itself.
+
+### 76. Centro subscription billing + DTE emission arc (2026-05-12)
+
+Full multi-month plan discussed this session, not started.
+
+**Scope** (rough order):
+1. **MercadoPago subscription billing** for centro plans —
+   monthly/annual recurring charges, plan tiers, cancellation
+   flow, dunning.
+2. **DTE emission** (Documentos Tributarios Electrónicos —
+   Chilean tax-compliant invoices/boletas). Per current
+   research, **BaseAPI** is the recommended provider:
+   per-document pricing, sandbox available, developer-first,
+   multi-tenant aware. Alternatives evaluated: SimpleAPI
+   (acceptable), Bsale (heavier integration, also a CRM),
+   OpenFactura (older API), Skedu (specialized).
+3. **Centro-facing billing settings**: which DTE provider
+   credentials the centro uses, default folio ranges, document
+   types they emit (boleta exenta vs afecta, factura, etc.).
+4. **Patient invoice emission flow**: when an appointment is
+   marked paid, optionally emit a DTE through the centro's
+   configured provider, attach the resulting PDF/XML to the
+   appointment record.
+5. **Public profile page** (per gap 51) — this is part of
+   the same arc because a "buy now / book here" patient-
+   facing flow needs a brand surface and a payment surface
+   together.
+
+**Estimated effort**: 4-6 weeks of focused work.
+
+**Blocking decisions before starting**:
+- DTE provider selection (current lean: BaseAPI).
+- Single-tenant vs multi-tenant DTE credential storage
+  (per-centro credentials in `clients.config` vs a platform-
+  owned account that emits on behalf of all centros).
+- Subscription tier pricing.
+
+The biggest remaining piece for Vitalis launch readiness.
+Vitalis can launch in manual-billing-and-invoicing mode
+today; this arc is the upgrade to self-service / scalable.
+
 ---
 
 ## PHASE 3 — Major future work

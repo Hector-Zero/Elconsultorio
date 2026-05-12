@@ -4,6 +4,156 @@ Append-only log of significant work sessions. Most recent at top.
 
 ---
 
+## 2026-05-12 — dirty-state guard arc, per-pro themes arc, loading screen polish
+
+Three major arcs landed in this session, plus several smaller cleanups.
+23 commits total.
+
+### Arc 1: Dirty-state guard infrastructure (4 commits)
+
+Central `useDirtyForm` hook + `DirtyGuardContext` provider that
+intercepts navigation when any registered form has unsaved
+changes. Soft-blocks SPA-internal nav via custom Spanish confirm
+modal ("Tienes cambios sin guardar — ¿Quieres salir sin guardar
+los cambios?"). Browser refresh / close-tab triggers the native
+beforeunload prompt. Browser back/forward deferred (see gap 73).
+
+Wired into:
+- 5 settings editors (profile [refactor], empresa, botConfig,
+  serviciosSesiones, empresaWizard). Templates/Integrations/Plan
+  deferred until they have real save flows (gap 70).
+- Apariencia (with the additional local-preview rework — clicking
+  a theme card now updates only local state, applyTheme runs only
+  on save).
+- Modal editors: ProfessionalEditor + CitaModal (close paths
+  routed through guard.confirm — backdrop, X, Cancelar all
+  prompt before discard).
+
+Commits: `a504355` (infra), `c082d2f` (settings editors),
+`b7e0671` (Apariencia local-preview), `f229b5a` (modal editors).
+
+### Arc 2: Per-pro dashboard themes (3 phases + follow-ups)
+
+Pros can now save a personal dashboard theme that overrides the
+centro theme for their own logged-in view. Patient-facing
+surfaces remain locked to the centro theme via documented
+convention (gap 69).
+
+Migration (applied earlier): `20260511190000_add_theme_id_to_professional_profiles.sql`
+
+- **Phase 1** (`2351eaa`): resolver helper +
+  `flattenEmployment.theme_id` passthrough + App.jsx mount-time
+  wiring through the resolver.
+- **Phase 2** (`e4a5e0c`): Apariencia mode-aware read/write —
+  pros save to `professional_profiles.theme_id`, admins save to
+  `clients.config.theme_id`.
+- **Follow-up cluster**:
+  - `b5e22e2`: refreshProfessional + dirty-snapshot race fix in
+    ProfessionalEditor (two parallel async loads were writing
+    snapshot with stale closure values for each other's fields).
+  - `fdc619f`: removed the refreshProfessional call to avoid
+    GuardedShell remount (which loses settings.section state).
+  - `e2efcdc`: introduced `proThemeSaveTick` — App.jsx-level no-op
+    state bump that drives an App.jsx re-render after pro save,
+    cascading fresh T values to Sidebar/TopBar without remount.
+- **Phase 3** (`0c5e5d4`): convention lock — JSDoc on resolver +
+  gap 69 entry codifying that patient-facing surfaces must read
+  `clients.config.theme_id` directly.
+
+Key architectural decision (Reading A): centro theme is the public
+brand seen by patients, period. Pro themes are internal-dashboard
+only. The pro override never propagates to patient-facing surfaces.
+
+### Arc 3: Loading screen polish (5 commits + 1 diagnostic + 1 cleanup)
+
+Hard refresh now renders the saved theme from the very first paint
+instead of flashing default Verde Salud. Includes a shared
+`<Loader>` component (themed ψ font-cycling animation, 1.5s swap,
+3 system font stacks) replacing every "Cargando..." in the SPA.
+
+- `8139ac9`: pre-mount localStorage cache + inline `<script>` in
+  `index.html` that synchronously sets `:root` CSS vars before
+  React mounts. Sync source-of-truth duplication of the THEMES
+  color map (and an inline `softenHex` mirror) — documented as
+  intentional since module imports aren't available pre-mount.
+- `bd41ac1`: themed Loader component (14 visual loaders replaced;
+  2 TopBar subtitle text strings preserved).
+- `090e3c3` → `ce0dd92` → `991f727`: gate refinement to fix
+  pro-mode boot flash. Three iterations because the underlying
+  bug (pro-context effect's `setProfessional(null)` premature
+  early-return) was disguised by the symptom (theme effect firing
+  with `professional !== undefined` but `bootstrap.loading=false`).
+- `5779aab`: diagnostic instrumentation that traced the bug to
+  its root cause.
+- `eb16c85`: cleanup of diagnostic logs + Apariencia mount-time
+  preselect flash fix (initializer now reads `professional.theme_id`
+  from context instead of waiting for async fetch).
+
+Subliminal brand watermark: the ψ is only visible to centro users
+(admins, pros), never to patients (bot is text-only, no patient
+dashboard exists). Acceptable B2B brand reinforcement.
+
+### Smaller landings
+
+- `90a3c7d`: pro self-edit persistence bug — the bug that opened
+  this session. The `canWriteProfile` gate at ProfessionalEditor
+  was excluding self-mode writes from `professional_profiles`
+  because it inverted the `profileLocked` semantic.
+- `9bec13e` → `27c26cf`: per-pro services UI removal, then
+  restoration as toggle-only (Empresa mode only). Per-row pricing
+  was correctly identified as catalog-management territory; the
+  toggle is the right UX for "this pro offers this service."
+- `3abecf9`: Profesionales sidebar item hidden in Single mode
+  (single-pro centros don't need a multi-pro editor surface).
+- `fdefdd0`: removed duplicate `Tipos de sesión` section from
+  settings/profile.jsx — it had drifted from the canonical
+  Servicios y Sesiones screen.
+- `9ab7d0f`: removed Ultra Pro and Océano themes from the
+  catalog. THEMES count down to 4 (rosa-palo, lavanda-pro,
+  verde-salud, carbon).
+
+### Strategic discussions documented elsewhere
+
+Chilean DTE invoicing landscape (BaseAPI / SimpleAPI / Bsale /
+OpenFactura / Skedu analysis) and a full architecture plan for
+payments + DTE emission was discussed but not started. Estimated
+4-6 weeks of focused work. Deferred until current product polish
+completes. See gap 76.
+
+### Decisions locked
+
+- **Reading A on patient-facing themes**: centro theme always wins
+  publicly, pro themes stay internal. Codified in
+  `resolveActiveThemeId.js` JSDoc + gap 69.
+- **localStorage cache uses single key** `'last_theme_id'` (shared
+  across users on the same browser — acceptable for B2B
+  personal-device usage; the worst case is "previous user's
+  theme renders during the first ~200ms of loading screen,"
+  which corrects itself once auth + bootstrap resolve).
+- **System fonts only in Loader** — no Google Fonts download,
+  no network dependency for the loading state.
+- **1.5s font-cycle interval** in Loader (slower than the
+  prototype's 1.1s — feels less frantic during sub-1s loads).
+- **No wordmark or text on Loader** — pure ψ.
+
+### Pause point for next session
+
+The product surface that's currently polished:
+- Pro self-edit works end-to-end (initial bug fixed).
+- Dirty-state guard protects all major editors.
+- Per-pro themes work, with patient-facing surfaces locked to
+  centro.
+- Loading screen renders correctly themed from first paint.
+
+Recommended next arc (in rough priority):
+1. **Bot polish session** (existing item 1 cluster + gap 74 —
+   get_bot_context implicit-active fallback for per-pro services).
+2. **Centro subscription + DTE emission arc** (gap 76, biggest
+   remaining piece for Vitalis launch readiness).
+3. **Pro mode UX cluster** (gaps 59-64, deferred since item 41).
+
+---
+
 ## 2026-05-08 / 2026-05-09 — gap 66 schema cutover + RPC + RLS hotfix + SPA migration
 
 Six commits + four migrations + one Edge Function deploy. Gap 66
