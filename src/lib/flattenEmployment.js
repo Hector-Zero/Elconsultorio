@@ -37,5 +37,6 @@ export function flattenEmployment(row) {
     public_summary:       profile.public_summary,
     public_credentials:   profile.public_credentials,
     public_documents:     profile.public_documents,
+    theme_id:             profile.theme_id,
   }
 }

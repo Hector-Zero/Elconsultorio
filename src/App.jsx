@@ -6,6 +6,7 @@ import { useClientConfig } from './lib/useClientConfig.js'
 import { ClientConfigCtx } from './lib/ClientConfigCtx.js'
 import { DirtyGuardProvider, DirtyGuardCtx } from './lib/DirtyGuardContext.jsx'
 import { flattenEmployment } from './lib/flattenEmployment.js'
+import { resolveActiveThemeId } from './lib/resolveActiveThemeId.js'
 import { T, applyTheme, AssistantFAB } from './screens/shared.jsx'
 import { getTheme } from './config/themes.js'
 import Login from './Login.jsx'
@@ -80,7 +81,7 @@ export default function App() {
       .from('professional_employments')
       .select(`
         id, client_id, color, email, active, public_profile,
-        professional_profiles!inner(id, user_id, full_name, photo_url)
+        professional_profiles!inner(id, user_id, full_name, photo_url, theme_id)
       `)
       .eq('client_id', bootstrap.clientId)
       .eq('active', true)
@@ -93,10 +94,14 @@ export default function App() {
   }, [session?.user?.id, bootstrap.clientId])
 
   useEffect(() => {
-    const theme = getTheme(bootstrap.themeId)
-    applyTheme(theme)
+    const activeThemeId = resolveActiveThemeId({
+      proThemeId:    professional?.theme_id,
+      centroThemeId: bootstrap.themeId,
+      isPro:         !!professional,
+    })
+    applyTheme(getTheme(activeThemeId))
     setThemeVersion(v => v + 1)
-  }, [bootstrap.themeId])
+  }, [bootstrap.themeId, professional])
 
   // ONBOARDING STEP 1: Profile must be completed before the app is fully functional.
   // The bot system prompt, email notifications, certificates, and agenda all depend
